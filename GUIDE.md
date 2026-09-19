@@ -38,7 +38,62 @@ go version
 git --version
 ```
 
-Si Go manque, installe-le depuis <https://go.dev/dl/>.
+Si `go version` affiche une erreur ou une version **inférieure à 1.24**, installe Go comme expliqué ci-dessous.
+
+#### Installer Go sur Linux (serveur, devbox)
+
+⚠️ N'utilise pas `apt install golang` : la version des distributions est souvent trop ancienne.
+
+Copie-colle ces commandes. Elles téléchargent la dernière version officielle et l'installent dans `/usr/local/go` :
+
+```sh
+# 1. Trouver la dernière version et le type de processeur
+V=$(curl -s 'https://go.dev/VERSION?m=text' | head -1)
+ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+
+# 2. Télécharger et installer
+curl -LO "https://go.dev/dl/$V.linux-$ARCH.tar.gz"
+sudo rm -rf /usr/local/go
+sudo tar -C /usr/local -xzf "$V.linux-$ARCH.tar.gz"
+rm "$V.linux-$ARCH.tar.gz"
+
+# 3. Ajouter Go au PATH (une seule fois)
+echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> ~/.bashrc
+source ~/.bashrc
+```
+
+> Tu utilises zsh ? Remplace `~/.bashrc` par `~/.zshrc`.
+
+**Pas d'accès `sudo` ?** Installe Go dans ton dossier personnel :
+
+```sh
+mkdir -p ~/.local
+tar -C ~/.local -xzf "$V.linux-$ARCH.tar.gz"
+echo 'export PATH=$PATH:$HOME/.local/go/bin:$HOME/go/bin' >> ~/.bashrc
+source ~/.bashrc
+```
+
+#### Installer Go sur macOS
+
+Avec [Homebrew](https://brew.sh) :
+
+```sh
+brew install go
+```
+
+Sinon, télécharge le fichier `.pkg` sur <https://go.dev/dl/> et double-clique dessus.
+
+#### Installer Go sur Windows
+
+Télécharge le fichier `.msi` sur <https://go.dev/dl/> et lance-le. Pour gitscan, le plus simple reste d'utiliser WSL (Linux sous Windows) et de suivre les instructions Linux.
+
+#### Vérifier
+
+Ouvre un **nouveau** terminal, puis :
+
+```sh
+go version        # doit afficher go1.24 ou plus
+```
 
 ### 2. Compiler gitscan
 
