@@ -8,7 +8,7 @@ Scanne un dossier (et ses sous-dossiers), trouve tous les dépôts git et affich
 - les **branches locales jamais poussées** ou dont la branche distante a été supprimée ;
 - en option, **toutes les branches** (fusionnées ou non dans main) et la **configuration** (remotes, auteur, hooks, signature).
 
-Aucune dépendance : bibliothèque standard Go + le binaire `git`.
+Deux modes : un **rapport** en ligne de commande (scriptable, JSON) et une **interface interactive** (`-i`) pour agir en lot : fetch, pull, push.
 
 ```
 DÉPÔT        BRANCHE        REMOTE    VS MAIN  ÉTAT
@@ -26,9 +26,42 @@ work/web     main           ↑2        ↑2       non suivi 1, à pousser ↑2
 ## Installation
 
 ```sh
-go build -o gitscan .          # Go 1.21+
-sudo mv gitscan /usr/local/bin # ou go install .
+go mod tidy                    # télécharge les dépendances (Bubble Tea…) — Go 1.24+
+go build -o gitscan .
+sudo mv gitscan /usr/local/bin # ou : go install .
 ```
+
+## Mode interactif (`gitscan -i`)
+
+```
+gitscan  8 dépôts · 3 à pousser · 1 à tirer · 2 modifié(s) · 3 propres   ~/code
+    DÉPÔT        BRANCHE        REMOTE    VS MAIN    ÉTAT
+  ○ perso/blog   main           ↑1 ↓1     ↑1 ↓1      modifié 1, non suivi 1, divergé ↑1 ↓1
+  ● perso/notes  master         —         =          ✗ push : aucun remote configuré, jamais poussée
+❯ ○ work/infra   main           =         =          ✓ pull, ✓ propre
+  ● work/web     main           =         =          ✓ push, non suivi 1
+2 sélectionné(s)  ✓ push work/web
+espace sélect. · a tout · f fetch · p pull · P push · ⏎ détail · t à traiter · / chercher · ? aide · q quitter
+```
+
+| Touche | Action |
+|---|---|
+| `↑ ↓` / `j k` | naviguer (`g`/`G` début/fin, pgup/pgdown) |
+| `espace` / `x` | sélectionner ; `a` tout sélectionner ; `échap` efface |
+| `f` | fetch --all --prune (sélection, ou dépôt sous le curseur) |
+| `p` | pull **--ff-only** : jamais de merge implicite, git refuse s'il y a divergence |
+| `P` | push, **avec confirmation** ; `-u origin HEAD` si la branche n'a jamais été poussée |
+| `r` / `R` | ré-analyser la sélection / re-scanner le dossier |
+| `entrée` | détail : fichiers modifiés, branches, config, 15 derniers commits, sortie de la dernière action |
+| `s` / `l` | ouvrir un shell / lazygit dans le dépôt (retour dans gitscan en quittant) |
+| `t` | n'afficher que les dépôts qui demandent une action |
+| `o` | trier par nom ou par gravité |
+| `/` | rechercher par chemin ou branche |
+| `?` / `q` | aide / quitter |
+
+Les actions tournent en parallèle, avec un spinner par dépôt, et chaque dépôt est ré-analysé une fois l'action terminée. `gitscan -i -f` fait un fetch général au démarrage.
+
+Les commandes git sont détachées du terminal : si une clé SSH demande une passphrase (pas d'agent ssh), l'action échoue proprement au lieu de bloquer l'interface. Lance `ssh-add` avant.
 
 ## Utilisation
 
@@ -92,6 +125,7 @@ Colonne **VS MAIN** : `↑` = commits de la branche absents de main, `↓` = com
 
 - Découverte : parcours récursif ; un dossier contenant `.git` (dossier ou fichier, donc worktrees et submodules compris) est un dépôt. On ne descend pas dedans, sauf avec `-nested`.
 - Chaque dépôt est analysé par un pool de goroutines. L'essentiel vient d'un seul `git status --porcelain=v2 --branch`, complété par `for-each-ref` (branches) et `rev-list --left-right --count` (comparaison avec main).
+- La TUI suit l'architecture Elm de Bubble Tea : un modèle (état), `Update` (réagit aux touches et aux résultats git), `View` (dessine l'écran). Voir `tui.go`.
 - Les commandes git tournent avec `GIT_TERMINAL_PROMPT=0` (jamais bloqué par une demande de mot de passe) et `GIT_OPTIONAL_LOCKS=0` (n'interfère pas avec un éditeur ouvert).
 
 ## Tester
@@ -100,6 +134,6 @@ Colonne **VS MAIN** : `↑` = commits de la branche absents de main, `↓` = com
 
 ## Pistes pour la suite
 
-- Interface texte interactive (Bubble Tea) : naviguer, cocher des dépôts, lancer pull / push / fetch en lot.
+- Dans la TUI : supprimer les branches fusionnées, changer de branche, `stash` / `stash pop`.
 - Actions en masse : `gitscan pull --ff-only`, `gitscan prune-merged`.
 - Fichier de config (`~/.config/gitscan.toml`) : dossiers par défaut, exclusions, branche principale par dépôt.

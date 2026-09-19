@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 func main() {
 	os.Exit(run())
@@ -41,12 +41,13 @@ func run() int {
 		noColor      = flag.Bool("no-color", false, "désactiver les couleurs")
 		check        = flag.Bool("check", false, "code de sortie 1 si un dépôt demande une action")
 		showVersion  = flag.Bool("version", false, "afficher la version")
+		interactive  = flag.Bool("i", false, "mode interactif (TUI) : naviguer, sélectionner, fetch/pull/push en lot")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage : gitscan [options] [dossier]\n\n")
 		fmt.Fprintf(os.Stderr, "Scanne récursivement un dossier et affiche l'état de chaque dépôt git.\n\nOptions :\n")
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nExemples :\n  gitscan ~/code\n  gitscan -f -a ~/code        # fetch puis n'afficher que ce qui demande une action\n  gitscan -b -c .             # détail des branches et de la config\n  gitscan -json ~/code | jq '.[] | select(.ahead > 0) | .path'\n")
+		fmt.Fprintf(os.Stderr, "\nExemples :\n  gitscan ~/code\n  gitscan -i ~/code           # interface interactive\n  gitscan -f -a ~/code        # fetch puis n'afficher que ce qui demande une action\n  gitscan -b -c .             # détail des branches et de la config\n  gitscan -json ~/code | jq '.[] | select(.ahead > 0) | .path'\n")
 	}
 	flag.Parse()
 
@@ -74,6 +75,15 @@ func run() int {
 		if e = strings.TrimSpace(e); e != "" {
 			excludes[e] = true
 		}
+	}
+
+	if *interactive {
+		opt := InspectOptions{Fetch: *fetch, FetchTimeout: *fetchTimeout, MainOverride: *mainBranch}
+		if err := runTUI(root, *depth, excludes, *nested, opt, *jobs); err != nil {
+			fmt.Fprintln(os.Stderr, "gitscan :", err)
+			return 2
+		}
+		return 0
 	}
 
 	start := time.Now()
