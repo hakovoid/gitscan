@@ -44,7 +44,16 @@ Si `go version` affiche une erreur ou une version **inférieure à 1.24**, insta
 
 ⚠️ N'utilise pas `apt install golang` : la version des distributions est souvent trop ancienne.
 
-Copie-colle ces commandes. Elles téléchargent la dernière version officielle et l'installent dans `/usr/local/go` :
+**Le plus simple : le script fourni** (marche aussi sur macOS).
+
+```sh
+sh scripts/install-go.sh           # installe dans /usr/local/go (demande sudo si besoin)
+sh scripts/install-go.sh --user    # ou dans ~/.local/go, sans sudo
+```
+
+Il détecte ton système, télécharge la dernière version, vérifie le fichier, l'installe et règle le PATH. Relance-le plus tard pour mettre Go à jour : il ne fait rien si tu as déjà la dernière version.
+
+**À la main**, si tu préfères : copie-colle ces commandes. Elles téléchargent la dernière version officielle et l'installent dans `/usr/local/go`.
 
 ```sh
 # 1. Trouver la dernière version et le type de processeur
