@@ -228,7 +228,7 @@ Tu te déplaces dans la liste, tu coches des dépôts, puis tu appuies sur une t
 | `t` | n'afficher que ce qui demande une action |
 | `/` | rechercher un dépôt |
 | `s` | ouvrir un terminal dans le dépôt |
-| `?` | aide |
+| `?` | **tous les raccourcis clavier** (depuis n'importe quel écran) |
 | `q` | quitter |
 
 Si aucun dépôt n'est coché, l'action s'applique au dépôt sous le curseur.

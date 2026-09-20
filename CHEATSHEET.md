@@ -81,7 +81,7 @@ gitscan -check -f ~/code
 | `i` | **expliquer** les signaux du dépôt, avec les commandes git à lancer |
 | `échap` | revenir en arrière ; efface la recherche, puis la sélection, puis le filtre |
 | `q` | quitter (`ctrl+c` aussi) |
-| `?` | aide à l'écran |
+| `?` | **tous les raccourcis** à l'écran ; marche depuis n'importe quelle vue, `↑` `↓` pour dérouler si l'écran est court |
 
 ### Sélection
 

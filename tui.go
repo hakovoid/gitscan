@@ -155,6 +155,8 @@ type model struct {
 
 	infoVP   viewport.Model // encadré d'explication (touche i)
 	infoBack viewMode       // vue à restaurer en fermant l'encadré
+	helpVP   viewport.Model // écran des raccourcis (touche ?)
+	helpBack viewMode       // vue à restaurer en fermant les raccourcis
 	spin     spinner.Model
 	msg      string
 	msgErr   bool
@@ -175,6 +177,7 @@ func runTUI(root string, depth int, excludes map[string]bool, nested bool, opt I
 		spin:         spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(stCyan)),
 		vp:           viewport.New(80, 20),
 		infoVP:       viewport.New(80, 20),
+		helpVP:       viewport.New(80, 20),
 	}
 	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err
@@ -352,7 +355,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch m.mode {
 		case modeHelp:
-			m.mode = modeList
+			m.keyHelp(msg)
 			return m, nil
 		case modeConfirm:
 			return m, m.keyConfirm(msg)
@@ -496,7 +499,7 @@ func (m *model) keyList(msg tea.KeyMsg) tea.Cmd {
 	case "/":
 		m.searching = true
 	case "?":
-		m.mode = modeHelp
+		m.openHelp()
 	case "i":
 		if r := m.current(); r != nil {
 			m.openInfo(r)
@@ -557,6 +560,9 @@ func (m *model) keyDetail(msg tea.KeyMsg) tea.Cmd {
 		if r != nil {
 			m.askPush([]*Repo{r})
 		}
+		return nil
+	case "?":
+		m.openHelp()
 		return nil
 	case "i":
 		if r := m.repoByPath(m.detailPath); r != nil {
@@ -1129,6 +1135,7 @@ func (m *model) viewDetail() string {
 	footer := helpLine([][2]string{
 		{"esc", "retour"}, {"f", "fetch"}, {"p", "pull"}, {"P", "push"}, {"r", "rafraîchir"},
 		{"b", "branches"}, {"i", "expliquer"}, {"s", "shell"}, {"l", "lazygit"}, {"↑↓", "défiler"},
+		{"?", "aide"},
 	})
 	if pct := m.vp.ScrollPercent(); m.vp.TotalLineCount() > m.vp.Height {
 		footer += stDim.Render(fmt.Sprintf("   %d%%", int(pct*100)))
@@ -1158,63 +1165,109 @@ func (m *model) viewConfirm() string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, stBox.Render(b.String()))
 }
 
-func (m *model) viewHelp() string {
-	rows := [][2]string{
-		{"↑ ↓  j k", "naviguer (pgup/pgdown, g/G : début/fin)"},
-		{"espace  x", "sélectionner / désélectionner"},
-		{"a", "tout sélectionner (dans la vue filtrée)"},
-		{"échap", "effacer la recherche, puis la sélection, puis le filtre"},
-		{"", ""},
-		{"f", "fetch --all --prune (sélection ou dépôt courant)"},
-		{"p", "pull --ff-only (jamais de merge implicite)"},
-		{"P", "push, avec confirmation (-u si la branche n'a pas d'upstream)"},
+// helpRows : toutes les touches, regroupées par thème.
+// « § » en première colonne ouvre une section.
+func helpRows() [][2]string {
+	return [][2]string{
+		{"§", "NAVIGUER"},
+		{"↑ ↓  j k", "monter / descendre   ·   pgup pgdown   ·   g G : début / fin"},
+		{"échap", "revenir en arrière ; efface la recherche, la sélection, puis le filtre"},
+		{"q", "quitter (ctrl+c aussi)"},
+		{"§", "SÉLECTIONNER   (sans sélection, les actions visent le dépôt sous le curseur)"},
+		{"espace  x", "cocher / décocher le dépôt"},
+		{"a", "tout cocher, ou tout décocher, dans la vue affichée"},
+		{"§", "AGIR SUR GIT"},
+		{"f", "fetch --all --prune : met à jour les infos du serveur, sans toucher aux fichiers"},
+		{"p", "pull --ff-only : jamais de merge implicite ; refuse si divergence"},
+		{"P", "push, avec confirmation ; -u origin HEAD si la branche n'a pas d'upstream"},
 		{"r / R", "ré-analyser la sélection / re-scanner tout le dossier"},
-		{"", ""},
-		{"entrée", "détail : fichiers, branches, config, commits"},
-		{"b", "vue branches : lien avec le serveur, u pour relier"},
-		{"i", "expliquer les signaux du dépôt, avec les commandes git"},
-		{"s", "ouvrir un shell dans le dépôt"},
-		{"l", "ouvrir lazygit dans le dépôt"},
-		{"", ""},
+		{"§", "VOIR PLUS"},
+		{"entrée", "détail : fichiers modifiés, branches, config, 15 derniers commits"},
+		{"b", "vue branches (voir plus bas)"},
+		{"i", "expliquer les signaux du dépôt, avec les commandes git à lancer"},
+		{"s / l", "ouvrir un shell / lazygit dans le dépôt (exit pour revenir)"},
+		{"§", "AFFICHAGE"},
 		{"t", "n'afficher que les dépôts qui demandent une action"},
 		{"o", "trier par nom / par gravité"},
-		{"/", "rechercher (chemin ou branche)"},
-		{"q", "quitter"},
+		{"/", "rechercher (chemin ou branche) ; entrée valide, échap efface"},
+		{"§", "DANS LA VUE BRANCHES (touche b)"},
+		{"u", "relier la branche à la branche distante de même nom (git branch -u)"},
+		{"entrée", "voir les commits de cette branche"},
+		{"r / échap", "rafraîchir / retour"},
+		{"§", "PARTOUT"},
+		{"?", "cet écran ; ↑ ↓ pour dérouler s'il ne tient pas"},
 	}
-	lines := func(compact bool) string {
-		var b strings.Builder
-		for _, r := range rows {
-			if r[0] == "" {
-				if !compact {
-					b.WriteString("\n")
-				}
-				continue
-			}
-			b.WriteString(fmt.Sprintf("  %s  %s\n", stKey.Render(fmt.Sprintf("%-10s", r[0])), r[1]))
-		}
-		return strings.TrimRight(b.String(), "\n")
-	}
-	back := stDim.Render("Une touche pour revenir.")
-	fitBox := func(st lipgloss.Style, content string) string {
-		if w := lipgloss.Width(content) + st.GetHorizontalFrameSize(); w > m.width {
-			st = st.Width(max(10, m.width-st.GetHorizontalBorderSize()))
-		}
-		return st.Render(content)
-	}
+}
 
-	// Du plus confortable au plus compact, on garde la première version qui tient.
-	candidates := []string{
-		fitBox(stBox, renderBanner(m.width-8)+"\n\n"+stBold.Render("Raccourcis clavier")+"\n\n"+lines(false)+"\n\n"+back),
-		fitBox(stBox, stTitle.Render("gitscan")+stDim.Render(" — raccourcis clavier")+"\n\n"+lines(false)+"\n\n"+back),
-		fitBox(stBox.Padding(0, 1), stTitle.Render("gitscan")+stDim.Render(" — raccourcis · une touche pour revenir")+"\n"+lines(true)),
-	}
-	box := candidates[len(candidates)-1]
-	for _, c := range candidates {
-		if lipgloss.Height(c) <= m.height {
-			box = c
-			break
+// helpText : les raccourcis mis en page à la largeur voulue, avec ou sans
+// lignes vides entre les sections. Les descriptions trop longues passent à la
+// ligne sous elles-mêmes plutôt que d'être coupées.
+func helpText(airy bool, width int) string {
+	const keyCol = 12 // « %-10s » + deux espaces
+	var b strings.Builder
+	for i, r := range helpRows() {
+		if r[0] == "§" {
+			if airy && i > 0 {
+				b.WriteString("\n")
+			}
+			b.WriteString(stTitle.Render(wrapText(r[1], max(10, width))) + "\n")
+			continue
+		}
+		desc := strings.Split(wrapText(r[1], max(12, width-keyCol)), "\n")
+		b.WriteString(fmt.Sprintf("%s  %s\n", stKey.Render(fmt.Sprintf("%-10s", r[0])), desc[0]))
+		for _, l := range desc[1:] {
+			b.WriteString(strings.Repeat(" ", keyCol) + l + "\n")
 		}
 	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// openHelp prépare l'écran des raccourcis : il défile si l'écran est trop court.
+func (m *model) openHelp() {
+	m.helpVP.Width = max(20, min(100, m.width-6))
+	content := helpText(true, m.helpVP.Width)
+	avail := m.height - 8 // bordures, marges, titre, pied de page
+	if lipgloss.Height(content) > avail {
+		content = helpText(false, m.helpVP.Width) // sans les lignes vides, ça tient peut-être
+	}
+	m.helpVP.Height = max(3, min(lipgloss.Height(content), avail))
+	m.helpVP.SetContent(content)
+	m.helpVP.GotoTop()
+	m.helpBack = m.mode
+	m.mode = modeHelp
+}
+
+// keyHelp : les touches de défilement font défiler, toutes les autres referment.
+func (m *model) keyHelp(msg tea.KeyMsg) {
+	scrollable := m.helpVP.TotalLineCount() > m.helpVP.Height
+	if scrollable {
+		switch msg.String() {
+		case "up", "down", "k", "j", "pgup", "pgdown", "ctrl+u", "ctrl+d":
+			m.helpVP, _ = m.helpVP.Update(msg)
+			return
+		case "g", "home":
+			m.helpVP.GotoTop()
+			return
+		case "G", "end":
+			m.helpVP.GotoBottom()
+			return
+		}
+	}
+	m.mode = m.helpBack
+}
+
+func (m *model) viewHelp() string {
+	title := stTitle.Render("gitscan") + stDim.Render(" — raccourcis clavier")
+	footer := stDim.Render("Une touche pour revenir.")
+	if m.helpVP.TotalLineCount() > m.helpVP.Height {
+		footer = stDim.Render(fmt.Sprintf("↑↓ dérouler (%d%%) · une autre touche pour revenir",
+			int(m.helpVP.ScrollPercent()*100)))
+	}
+	st := stBox
+	if w := m.helpVP.Width + st.GetHorizontalFrameSize(); w > m.width {
+		st = st.Padding(0, 1)
+	}
+	box := st.Render(title + "\n\n" + m.helpVP.View() + "\n\n" + footer)
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 }
 
@@ -1234,6 +1287,9 @@ func (m *model) keyInfo(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc", "q", "i", "enter":
 		m.mode = m.infoBack
+		return nil
+	case "?":
+		m.openHelp()
 		return nil
 	}
 	var cmd tea.Cmd

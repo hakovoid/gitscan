@@ -66,6 +66,9 @@ func (m *model) keyBranches(msg tea.KeyMsg) tea.Cmd {
 	case "esc", "q", "b", "left", "h":
 		m.mode = modeDetail
 		return nil
+	case "?":
+		m.openHelp()
+		return nil
 	case "up", "k":
 		m.branchCursor--
 	case "down", "j":
@@ -192,7 +195,7 @@ func (m *model) viewBranches() string {
 	b.WriteString(strings.Repeat("\n", max(0, h-min(len(list), h))))
 	b.WriteString(fit(helpLine([][2]string{
 		{"u", "relier au serveur"}, {"⏎", "commits"}, {"r", "rafraîchir"},
-		{"esc", "retour"}, {"↑↓", "naviguer"},
+		{"esc", "retour"}, {"↑↓", "naviguer"}, {"?", "aide"},
 	}), m.width))
 	return b.String()
 }

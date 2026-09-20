@@ -81,7 +81,8 @@ espace sélect. · a tout · f fetch · p pull · P push · ⏎ détail · t à 
 | `t` | n'afficher que les dépôts qui demandent une action |
 | `o` | trier par nom ou par gravité |
 | `/` | rechercher par chemin ou branche |
-| `?` / `q` | aide / quitter |
+| `?` | la liste complète des raccourcis, depuis n'importe quelle vue (`↑` `↓` pour dérouler) |
+| `q` | quitter |
 
 Les actions tournent en parallèle, avec un spinner par dépôt, et chaque dépôt est ré-analysé une fois l'action terminée. `gitscan -i -f` fait un fetch général au démarrage.
 
