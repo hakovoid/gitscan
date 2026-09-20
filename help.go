@@ -46,6 +46,8 @@ func printLegend(w io.Writer, p palette) {
 	row("supprimée", "la branche distante a été effacée (souvent : PR fusionnée)")
 	row("aucun", "le dépôt n'a aucun serveur (remote) configuré")
 	row("fetch ✗", "impossible de joindre le serveur (réseau, clé SSH…)")
+	note("Les ↑↓ comparent à l'upstream configuré : « suit origin/x, pas y » dans À VOIR")
+	note("signale qu'il porte un autre nom que ta branche (git branch -u origin/y pour corriger).")
 
 	h("COLONNE LOCAL")
 	row("3 modifiés", "fichiers suivis modifiés, pas encore commités")

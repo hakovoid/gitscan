@@ -150,6 +150,7 @@ gitscan -json ~/code | jq -r '.[] | select(.config.user_email == null) | .path'
 | `non poussée(s) : a, b` | à traiter | autres branches locales avec des commits absents du serveur (au-delà de 3 : `n branches non poussées`) |
 | `tag sprint-33 (+3 autres sur ce commit)` | info | tags de ce commit, le plus récent d'abord ; `git describe` n'en montre qu'un, souvent le plus ancien |
 | `2 commits après sprint-33` | info | aucun tag sur ce commit : distance au tag le plus proche |
+| `suit origin/nbl, pas init-prd` | à traiter | la branche est reliée à une branche distante d'un autre nom : les ↑↓ de SERVEUR comparent à celle-là (`git branch -u origin/<branche>` pour corriger) |
 | `fetch il y a …` | info | dernier fetch de plus de 7 jours : SERVEUR est peut-être périmé |
 
 Les dépôts dont seuls les **droits** ont changé (cas fréquent sur un serveur après un `chmod -R`) sont signalés à part. Si c'est voulu : `git config core.fileMode false` dans le dépôt.

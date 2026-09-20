@@ -100,6 +100,12 @@ func (r *Repo) computeFlags() {
 	case r.Behind > 0:
 		r.add("behind", Warn, "à tirer ↓%d", r.Behind)
 	}
+	// Upstream d'un autre nom que la branche : les ↑↓ ne comparent pas ce qu'on croit.
+	if r.Upstream != "" && !r.UpstreamGone && !r.Detached {
+		if _, short, ok := strings.Cut(r.Upstream, "/"); ok && short != r.Branch {
+			r.add("upstream_other", Warn, "suit %s, pas %s", r.Upstream, r.Branch)
+		}
+	}
 	if n := len(r.UnpushedBranches); n > 0 {
 		// Jusqu'à 3 noms directement dans le tableau, sinon renvoi vers -b.
 		if n <= 3 {
