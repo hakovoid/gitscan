@@ -261,7 +261,14 @@ func renderBranches(w io.Writer, r *Repo, p palette, indent string) {
 		switch {
 		case b.UpstreamGone:
 			up = p.yellow + "upstream supprimé" + p.reset
-		case b.Upstream == "" && b.AheadMain > 0 && !isMainBranch(b.Name, r.MainRef):
+		case b.MatchRemote != "":
+			col := p.green
+			if b.MatchAhead > 0 || b.MatchBehind > 0 {
+				col = p.yellow
+			}
+			up = fmt.Sprintf("%s %s%s%s %s(sans upstream)%s", b.MatchRemote, col,
+				counts(b.MatchAhead, b.MatchBehind), p.reset, p.dim, p.reset)
+		case b.AheadMain > 0 && !isMainBranch(b.Name, r.MainRef):
 			up = p.yellow + "jamais poussée" + p.reset
 		case b.Upstream == "":
 			up = p.dim + "pas d'upstream" + p.reset

@@ -77,6 +77,7 @@ gitscan -check -f ~/code
 | `pgup` `pgdown` | page précédente / suivante |
 | `g` / `G` | début / fin de la liste |
 | `entrée` | détail du dépôt (fichiers, branches, config, 15 derniers commits) |
+| `b` (dans le détail) | change la branche dont les commits sont affichés |
 | `échap` | revenir en arrière ; efface la recherche, puis la sélection, puis le filtre |
 | `q` | quitter (`ctrl+c` aussi) |
 | `?` | aide à l'écran |

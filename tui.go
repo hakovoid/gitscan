@@ -73,10 +73,11 @@ type opDoneMsg struct {
 }
 
 type detailMsg struct {
-	path  string
-	repo  *Repo
-	log   string
-	files string
+	path   string
+	repo   *Repo
+	log    string
+	logRef string
+	files  string
 }
 
 type execDoneMsg struct {
@@ -103,9 +104,10 @@ type opResult struct {
 }
 
 type detailData struct {
-	repo  *Repo
-	log   string
-	files string
+	repo   *Repo
+	log    string
+	logRef string // branche des commits affichés
+	files  string
 }
 
 type model struct {
@@ -143,6 +145,7 @@ type model struct {
 	confirmPaths []string
 
 	detailPath string
+	detailRef  string // branche dont on affiche les commits ("" = branche courante)
 	detail     *detailData
 	vp         viewport.Model
 
@@ -255,12 +258,20 @@ func (m *model) loadDetailCmd(path string) tea.Cmd {
 	ctx, root := m.ctx, m.root
 	opt := m.opt
 	opt.AllBranches, opt.WithConfig = true, true
+	ref := m.detailRef
 	return func() tea.Msg {
 		r := inspect(ctx, root, path, opt)
+		target, label := "HEAD", r.Branch
+		if ref != "" {
+			target, label = ref, ref
+		}
+		if r.Detached && ref == "" {
+			label = "@" + r.HeadSHA
+		}
 		log, _ := runGit(ctx, path, "log", "-n", "15", "--color=always",
-			"--format=%C(yellow)%h%C(reset) %s %C(dim)· %an, %cr%C(reset)%C(auto)%d")
+			"--format=%C(yellow)%h%C(reset) %s %C(dim)· %an, %cr%C(reset)%C(auto)%d", target)
 		files, _ := runGit(ctx, path, "-c", "color.status=always", "status", "--short")
-		return detailMsg{path: path, repo: r, log: log, files: files}
+		return detailMsg{path: path, repo: r, log: log, logRef: label, files: files}
 	}
 }
 
@@ -295,7 +306,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case detailMsg:
 		if msg.path == m.detailPath {
-			m.detail = &detailData{repo: msg.repo, log: msg.log, files: msg.files}
+			m.detail = &detailData{repo: msg.repo, log: msg.log, logRef: msg.logRef, files: msg.files}
 			m.replaceRepo(msg.repo)
 			m.vp.SetContent(m.renderDetail())
 		}
@@ -465,7 +476,7 @@ func (m *model) keyList(msg tea.KeyMsg) tea.Cmd {
 	case "enter":
 		if r := m.current(); r != nil {
 			m.mode = modeDetail
-			m.detailPath = r.AbsPath
+			m.detailPath, m.detailRef = r.AbsPath, ""
 			m.detail = nil
 			m.vp.SetContent(stDim.Render("  Chargement…"))
 			m.vp.GotoTop()
@@ -510,6 +521,30 @@ func (m *model) keyDetail(msg tea.KeyMsg) tea.Cmd {
 	case "P":
 		if r != nil {
 			m.askPush([]*Repo{r})
+		}
+		return nil
+	case "b":
+		// Passe d'une branche à l'autre pour la liste des commits.
+		if m.detail != nil && len(m.detail.repo.Branches) > 0 {
+			names := make([]string, 0, len(m.detail.repo.Branches))
+			for _, b := range m.detail.repo.Branches {
+				names = append(names, b.Name)
+			}
+			i := 0
+			for j, n := range names {
+				if n == m.detailRef {
+					i = j + 1
+					break
+				}
+			}
+			if m.detailRef == "" {
+				i = 0
+			}
+			m.detailRef = ""
+			if i < len(names) {
+				m.detailRef = names[i]
+			}
+			return m.loadDetailCmd(m.detailPath)
 		}
 		return nil
 	case "s":
@@ -1018,7 +1053,7 @@ func (m *model) renderDetail() string {
 		renderConfig(&b, r, p, "  ")
 	}
 
-	section("Derniers commits")
+	section("Derniers commits — " + d.logRef)
 	if strings.TrimSpace(d.log) == "" {
 		b.WriteString(stDim.Render("  aucun commit") + "\n")
 	} else {
@@ -1053,7 +1088,7 @@ func (m *model) viewDetail() string {
 	}
 	footer := helpLine([][2]string{
 		{"esc", "retour"}, {"f", "fetch"}, {"p", "pull"}, {"P", "push"}, {"r", "rafraîchir"},
-		{"s", "shell"}, {"l", "lazygit"}, {"↑↓", "défiler"},
+		{"b", "branche des commits"}, {"s", "shell"}, {"l", "lazygit"}, {"↑↓", "défiler"},
 	})
 	if pct := m.vp.ScrollPercent(); m.vp.TotalLineCount() > m.vp.Height {
 		footer += stDim.Render(fmt.Sprintf("   %d%%", int(pct*100)))

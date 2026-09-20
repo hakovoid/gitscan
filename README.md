@@ -75,6 +75,7 @@ espace sélect. · a tout · f fetch · p pull · P push · ⏎ détail · t à 
 | `P` | push, **avec confirmation** ; `-u origin HEAD` si la branche n'a jamais été poussée |
 | `r` / `R` | ré-analyser la sélection / re-scanner le dossier |
 | `entrée` | détail : fichiers modifiés, branches, config, 15 derniers commits, sortie de la dernière action |
+| `b` (dans le détail) | change la branche dont les commits sont affichés |
 | `s` / `l` | ouvrir un shell / lazygit dans le dépôt (retour dans gitscan en quittant) |
 | `t` | n'afficher que les dépôts qui demandent une action |
 | `o` | trier par nom ou par gravité |

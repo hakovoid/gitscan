@@ -82,6 +82,8 @@ type Branch struct {
 	BehindMain   int       `json:"behind_main"`
 	MergedInMain bool      `json:"merged_in_main"`
 	MatchRemote  string    `json:"match_remote,omitempty"` // sans upstream : branche distante de même nom
+	MatchAhead   int       `json:"match_ahead,omitempty"`
+	MatchBehind  int       `json:"match_behind,omitempty"`
 	LastCommit   time.Time `json:"last_commit"`
 }
 
@@ -453,25 +455,32 @@ func (r *Repo) readBranches(ctx context.Context, dir string, remotes map[string]
 			r.LocalMainBehind, _ = leftRight(ctx, dir, r.MainRef, b.Name)
 		}
 
-		// Travail non poussé sur une autre branche que la courante : une branche
-		// sans upstream peut très bien être déjà sur le serveur sous le même nom.
+		// Sans upstream, la branche est peut-être déjà sur le serveur sous le même
+		// nom : on la compare alors à celle-là (vrai pour la branche courante aussi).
+		if (b.Upstream == "" || b.UpstreamGone) && !b.UpstreamGone {
+			if m := matchRemote(remotes, b.Name); m != "" {
+				b.MatchRemote = m
+				b.MatchBehind, b.MatchAhead = leftRight(ctx, dir, m, b.Name)
+			}
+		}
+
+		// Travail non poussé sur une autre branche que la courante.
 		if !b.Current && b.Name != mainLocal {
 			switch {
 			case b.Upstream != "" && !b.UpstreamGone:
 				if b.Ahead > 0 {
 					r.UnpushedBranches = append(r.UnpushedBranches, b.Name)
 				}
-			default:
-				if m := matchRemote(remotes, b.Name); m != "" {
-					b.MatchRemote = m
-					if _, ahead := leftRight(ctx, dir, m, b.Name); ahead > 0 {
-						r.UnpushedBranches = append(r.UnpushedBranches, b.Name)
-					} else {
-						r.UnlinkedBranches = append(r.UnlinkedBranches, b.Name)
-					}
-				} else if r.MainRef == "" {
+			case b.MatchRemote != "":
+				if b.MatchAhead > 0 {
 					r.UnpushedBranches = append(r.UnpushedBranches, b.Name)
-				} else if _, ahead := leftRight(ctx, dir, r.MainRef, b.Name); ahead > 0 {
+				} else {
+					r.UnlinkedBranches = append(r.UnlinkedBranches, b.Name)
+				}
+			case r.MainRef == "":
+				r.UnpushedBranches = append(r.UnpushedBranches, b.Name)
+			default:
+				if _, ahead := leftRight(ctx, dir, r.MainRef, b.Name); ahead > 0 {
 					b.AheadMain = ahead
 					r.UnpushedBranches = append(r.UnpushedBranches, b.Name)
 				}
