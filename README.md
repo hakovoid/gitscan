@@ -134,7 +134,7 @@ gitscan -json ~/code | jq -r '.[] | select(.config.user_email == null) | .path'
 | Colonne | Contenu |
 |---|---|
 | DÉPÔT | chemin ; `├─ └─` = dépôt imbriqué (sous-module) rangé sous son parent |
-| BRANCHE | branche actuelle, ou `@commit` / `@tag` en HEAD détachée |
+| BRANCHE | branche actuelle, ou `@commit` (SHA court) en HEAD détachée ; les tags de ce commit sont listés dans À VOIR |
 | SERVEUR | branche vs sa copie distante : `↑` à pousser, `↓` à tirer, `=` à jour ; `jamais poussée`, `supprimée`, `aucun` (pas de remote), `fetch ✗` |
 | MAIN | branche vs main : `↑` commits en plus, `↓` commits de main manquants |
 | LOCAL | non commité : `n modifiés` (`dont n droits` = seul le chmod a changé), `n nouveaux`, `n conflits`, `n sous-modules` décalés, `stash n` |
@@ -148,7 +148,8 @@ gitscan -json ~/code | jq -r '.[] | select(.config.user_email == null) | .path'
 | `décalé : le parent attend x` | à traiter | sous-module pas sur le commit enregistré par son dépôt parent |
 | `sous-module ✓` | info | sous-module sur le commit attendu |
 | `non poussée(s) : a, b` | à traiter | autres branches locales avec des commits absents du serveur (au-delà de 3 : `n branches non poussées`) |
-| `sur le tag v1.4.2` | info | HEAD détachée sur un tag : normal pour un déploiement |
+| `tag sprint-33 (+3 autres sur ce commit)` | info | tags de ce commit, le plus récent d'abord ; `git describe` n'en montre qu'un, souvent le plus ancien |
+| `2 commits après sprint-33` | info | aucun tag sur ce commit : distance au tag le plus proche |
 | `fetch il y a …` | info | dernier fetch de plus de 7 jours : SERVEUR est peut-être périmé |
 
 Les dépôts dont seuls les **droits** ont changé (cas fréquent sur un serveur après un `chmod -R`) sont signalés à part. Si c'est voulu : `git config core.fileMode false` dans le dépôt.

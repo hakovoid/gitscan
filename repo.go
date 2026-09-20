@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,14 +16,16 @@ type Repo struct {
 	Path    string `json:"path"`     // chemin relatif au dossier scanné
 	AbsPath string `json:"abs_path"` // chemin absolu
 
-	Branch       string `json:"branch"`                // branche courante
-	Detached     bool   `json:"detached,omitempty"`    // HEAD détachée
-	HeadDesc     string `json:"head_desc,omitempty"`   // si détachée : tag ou commit (git describe)
-	HeadOnTag    bool   `json:"head_on_tag,omitempty"` // si détachée : exactement sur un tag
-	Upstream     string `json:"upstream,omitempty"`    // ex. origin/feature
-	UpstreamGone bool   `json:"upstream_gone,omitempty"`
-	Ahead        int    `json:"ahead"`  // commits à pousser
-	Behind       int    `json:"behind"` // commits à tirer
+	Branch       string   `json:"branch"`                   // branche courante
+	Detached     bool     `json:"detached,omitempty"`       // HEAD détachée
+	HeadSHA      string   `json:"head_sha,omitempty"`       // si détachée : commit court
+	HeadTags     []string `json:"head_tags,omitempty"`      // tags pointant exactement sur HEAD (plus récent d'abord)
+	HeadDesc     string   `json:"head_desc,omitempty"`      // sinon : « sprint-33-2-g70d8a93 » (git describe)
+	HeadAfterTag string   `json:"head_after_tag,omitempty"` // « 2 commits après sprint-33 »
+	Upstream     string   `json:"upstream,omitempty"`       // ex. origin/feature
+	UpstreamGone bool     `json:"upstream_gone,omitempty"`
+	Ahead        int      `json:"ahead"`  // commits à pousser
+	Behind       int      `json:"behind"` // commits à tirer
 
 	MainRef    string `json:"main_ref,omitempty"` // ex. origin/main
 	AheadMain  int    `json:"ahead_main"`         // commits de la branche absents de main
@@ -138,11 +141,25 @@ func inspect(ctx context.Context, root, path string, opt InspectOptions) *Repo {
 		if out, err := runGit(ctx, path, "rev-list", "--count", "HEAD", "--not", "--branches", "--remotes", "--tags"); err == nil {
 			r.OrphanCommits, _ = strconv.Atoi(strings.TrimSpace(out))
 		}
-		if out, err := runGit(ctx, path, "describe", "--tags", "--always"); err == nil {
-			r.HeadDesc = strings.TrimSpace(out)
+		if out, err := runGit(ctx, path, "rev-parse", "--short", "HEAD"); err == nil {
+			r.HeadSHA = strings.TrimSpace(out)
 		}
-		if _, err := runGit(ctx, path, "describe", "--tags", "--exact-match"); err == nil {
-			r.HeadOnTag = true
+		// Tous les tags posés sur ce commit, du plus récent au plus ancien : git
+		// describe n'en montre qu'un, souvent le plus ancien, ce qui induit en erreur.
+		if out, err := runGit(ctx, path, "tag", "--points-at", "HEAD", "--sort=-v:refname"); err == nil {
+			r.HeadTags = strings.Fields(strings.TrimSpace(out))
+		}
+		if len(r.HeadTags) == 0 {
+			if out, err := runGit(ctx, path, "describe", "--tags", "--always"); err == nil {
+				r.HeadDesc = strings.TrimSpace(out)
+				// « sprint-33-2-g70d8a93 » → « 2 commits après sprint-33 »
+				if i := strings.LastIndex(r.HeadDesc, "-g"); i > 0 {
+					if j := strings.LastIndex(r.HeadDesc[:i], "-"); j > 0 {
+						n := r.HeadDesc[j+1 : i]
+						r.HeadAfterTag = fmt.Sprintf("%s après %s", plur(atoi(n), "commit", "commits"), r.HeadDesc[:j])
+					}
+				}
+			}
 		}
 	}
 	if r.MainRef != "" {
@@ -459,4 +476,9 @@ func readConfig(ctx context.Context, dir string) *Config {
 		}
 	}
 	return c
+}
+
+func atoi(s string) int {
+	n, _ := strconv.Atoi(s)
+	return n
 }

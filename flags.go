@@ -74,11 +74,17 @@ func (r *Repo) computeFlags() {
 		r.add("untracked", Warn, "non suivi %d", r.Untracked)
 	}
 	switch {
-	case r.Detached && r.Submodule:
-		// Normal pour un sous-module : il est figé sur le commit choisi par le parent.
-	case r.Detached && r.HeadOnTag:
+	case r.Detached && r.Operation != "":
+		// Un rebase détache HEAD : inutile de le signaler deux fois.
+	case r.Detached && len(r.HeadTags) > 0:
 		// Courant pour un déploiement : on est sur une version taguée.
-		r.add("detached", Info, "sur le tag %s", r.HeadDesc)
+		label := "tag " + r.HeadTags[0]
+		if n := len(r.HeadTags) - 1; n > 0 {
+			label += fmt.Sprintf(" (+%d autre%s sur ce commit)", n, map[bool]string{true: "s"}[n > 1])
+		}
+		r.add("detached", Info, "%s", label)
+	case r.Detached && r.Submodule:
+		// Normal pour un sous-module.
 	case r.Detached:
 		r.add("detached", Warn, "HEAD détachée")
 	case r.UpstreamGone:

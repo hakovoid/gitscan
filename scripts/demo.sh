@@ -105,6 +105,12 @@ for i in 1 2 3; do echo "$i" > "$D/code/serveur/docs/p$i.md"; done
 g -C "$D/code/serveur/docs" add -A; g -C "$D/code/serveur/docs" commit -m pages; g -C "$D/code/serveur/docs" push
 chmod +x "$D"/code/serveur/docs/*.md
 echo "vraie modif" >> "$D/code/serveur/docs/p1.md"; chmod -x "$D/code/serveur/docs/p1.md"
+# un déploiement sur un commit portant plusieurs tags (cas fréquent : releases successives)
+mkrepo stopcom "$D/code/serveur/stopcom"
+for t in sprint-30 sprint-31 sprint-32 sprint-33; do g -C "$D/code/serveur/stopcom" tag "$t"; done
+g -C "$D/code/serveur/stopcom" push --tags
+g -C "$D/code/serveur/stopcom" checkout --detach
+
 rm -rf "$D"/tmp-sub-*
 
 # Un node_modules qui contient un dépôt (doit être ignoré)

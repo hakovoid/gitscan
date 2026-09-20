@@ -26,7 +26,8 @@ func printLegend(w io.Writer, p palette) {
 
 	h("LES COLONNES")
 	row("DÉPÔT", "chemin du dépôt ; ├─ └─ = dépôt imbriqué (sous-module) sous son parent")
-	row("BRANCHE", "branche actuelle, ou @commit / @tag si aucune branche (HEAD détachée)")
+	row("BRANCHE", "branche actuelle, ou @commit (SHA court) si aucune branche")
+	note("Les tags portés par ce commit sont listés dans « À VOIR ».")
 	row("SERVEUR", "la branche comparée à sa copie sur le serveur (son « upstream »)")
 	row("MAIN", "la branche comparée à main")
 	row("LOCAL", "ce qui n'est pas commité : fichiers modifiés, nouveaux, stash…")
@@ -65,7 +66,8 @@ func printLegend(w io.Writer, p palette) {
 	row("sous-module ✓", "sous-module sur le commit attendu par son parent")
 	row("non poussée(s) : a, b", "autres branches locales avec des commits absents du serveur")
 	row("n branches non poussées", "idem, plus de 3 (liste complète : gitscan -b)")
-	row("sur le tag v1.4.2", "(info) version taguée : normal pour un déploiement")
+	row("tag sprint-33", "(info) tag de ce commit ; « +3 autres » = 3 autres tags dessus")
+	row("2 commits après x", "(info) aucun tag sur ce commit : distance au tag le plus proche")
 	row("fetch il y a …", "(info) dernier fetch ancien : SERVEUR est peut-être périmé")
 
 	h("LES COULEURS")

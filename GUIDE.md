@@ -237,7 +237,7 @@ Tape `gitscan help` pour avoir cette explication dans le terminal.
 | Colonne | Ce qu'elle dit |
 |---|---|
 | **DÉPÔT** | le dossier du projet. `├─` et `└─` : projet rangé dans un autre (sous-module) |
-| **BRANCHE** | la branche sur laquelle tu es. `@a1b2c3d` ou `@v1.4.2` : tu es sur un commit ou un tag, pas sur une branche |
+| **BRANCHE** | la branche sur laquelle tu es. `@a1b2c3d` : tu es sur ce commit, pas sur une branche (ses tags sont dans À VOIR) |
 | **SERVEUR** | ta branche comparée au serveur : `↑2` à envoyer, `↓3` à récupérer, `=` à jour |
 | **MAIN** | ta branche comparée à `main` |
 | **LOCAL** | ce que tu n'as pas encore commité |
@@ -261,7 +261,8 @@ Tape `gitscan help` pour avoir cette explication dans le terminal.
 | `décalé : le parent attend …` | le sous-module n'est pas sur la version prévue par le projet parent | `git submodule update` depuis le parent (si c'est voulu) |
 | `sous-module ✓` | le sous-module est sur la bonne version | rien |
 | `non poussée(s) : dev, fix` | ces branches ont des commits qui ne sont pas sur le serveur | les pousser, ou les supprimer si inutiles |
-| `sur le tag v1.4.2` | version taguée (courant sur un serveur) | rien, si c'est voulu |
+| `tag sprint-33 (+3 autres)` | ce commit porte ce tag, et 3 autres tags pointent dessus | rien, si c'est la version voulue |
+| `2 commits après sprint-33` | aucun tag sur ce commit : il est 2 commits après le dernier tag | rien |
 
 Couleurs : **rouge** = risque · **jaune** = à faire · **gris** = info · **vert** = bon · **cyan** = branche · **magenta** = commit ou tag.
 

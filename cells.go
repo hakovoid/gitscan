@@ -60,7 +60,6 @@ var inColumns = map[string]bool{
 	"ahead": true, "behind": true, "diverged": true, "no_upstream": true, "no_remote": true,
 	"upstream_gone": true, "behind_main": true, "dirty": true, "mode_only": true,
 	"untracked": true, "conflicts": true, "stash": true, "submodules_changed": true,
-	"detached": true,
 }
 
 func buildCells(r *Repo) rowCells {
@@ -77,19 +76,21 @@ func buildCells(r *Repo) rowCells {
 	}
 
 	// BRANCHE
-	desc := r.HeadDesc
-	if desc == "" {
-		desc = "?"
-	}
 	switch {
-	case r.Detached && r.Submodule:
-		c.branch = []seg{{"@" + desc, toneTag}}
-	case r.Detached && r.HeadOnTag:
-		c.branch = []seg{{"@" + desc, toneTag}}
-	case r.Detached:
-		c.branch = []seg{{"@" + desc, toneWarn}}
-	default:
+	case !r.Detached:
 		c.branch = []seg{{r.Branch, toneAccent}}
+	default:
+		// Toujours le commit : c'est l'information sûre. Les tags et la distance
+		// au dernier tag vont dans « À VOIR ».
+		sha := r.HeadSHA
+		if sha == "" {
+			sha = "?"
+		}
+		t := toneTag
+		if !r.Submodule && len(r.HeadTags) == 0 {
+			t = toneWarn
+		}
+		c.branch = []seg{{"@" + sha, t}}
 	}
 
 	// SERVEUR : la branche comparée à sa branche distante
@@ -169,8 +170,8 @@ func buildCells(r *Repo) rowCells {
 		}
 		c.alerts = append(c.alerts, seg{f.Label, t})
 	}
-	if r.Detached && !r.Submodule && !r.HeadOnTag && r.Operation != "rebase" {
-		c.alerts = append([]seg{{"HEAD détachée", toneWarn}}, c.alerts...)
+	if r.HeadAfterTag != "" {
+		c.alerts = append(c.alerts, seg{r.HeadAfterTag, toneInfo})
 	}
 	if r.Submodule && r.SubInSync {
 		c.alerts = append(c.alerts, seg{"sous-module ✓", toneInfo})
