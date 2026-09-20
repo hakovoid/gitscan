@@ -21,7 +21,7 @@ import (
 	xterm "github.com/charmbracelet/x/term"
 )
 
-const version = "0.8.0"
+const version = "0.9.0"
 
 func main() {
 	os.Exit(run())
@@ -187,7 +187,7 @@ func run() int {
 		}
 		renderSummary(os.Stdout, repos, p, time.Since(start))
 		if !*fetch {
-			fmt.Printf("%sAstuce : -f pour faire un fetch d'abord (sinon SERVEUR peut être périmé).%s\n", p.dim, p.reset)
+			fmt.Printf("%sAstuce : -f pour faire un fetch d'abord (sinon vs SERVEUR peut être périmé).%s\n", p.dim, p.reset)
 		}
 		var more []string
 		if !*branches {

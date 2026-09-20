@@ -868,7 +868,7 @@ func (m *model) viewList() string {
 
 	// Largeurs de colonnes
 	cells := make([]rowCells, len(rows))
-	w := []int{len("DÉPÔT"), len("BRANCHE"), len("SERVEUR"), len("MAIN"), len("LOCAL")}
+	w := []int{len("DÉPÔT"), len("BRANCHE"), len("vs SERVEUR"), len("vs MAIN"), len("LOCAL")}
 	for i, tr := range rows {
 		cells[i] = buildCells(tr.repo)
 		w[0] = max(w[0], lipgloss.Width(tr.prefix+tr.name))
@@ -888,7 +888,7 @@ func (m *model) viewList() string {
 	}
 	aw := max(8, m.width-fixed())
 
-	hdrCells := []string{fit("DÉPÔT", w[0]), fit("BRANCHE", w[1]), fit("SERVEUR", w[2]), fit("MAIN", w[3]), fit("LOCAL", w[4]), "À VOIR"}
+	hdrCells := []string{fit("DÉPÔT", w[0]), fit("BRANCHE", w[1]), fit("vs SERVEUR", w[2]), fit("vs MAIN", w[3]), fit("LOCAL", w[4]), "À VOIR"}
 	for i := range hdrCells {
 		hdrCells[i] = stBold.Render(hdrCells[i])
 	}

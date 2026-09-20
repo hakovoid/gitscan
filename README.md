@@ -20,7 +20,7 @@ Scanne un dossier (et ses sous-dossiers), trouve tous les dépôts git et affich
 Deux modes : un **rapport** en ligne de commande (scriptable, JSON) et une **interface interactive** (`-i`) pour agir en lot : fetch, pull, push.
 
 ```
-   DÉPÔT        │ BRANCHE       │ SERVEUR   │ MAIN  │ LOCAL                      │ À VOIR
+   DÉPÔT        │ BRANCHE       │ vs SERVEUR │ vs MAIN │ LOCAL                      │ À VOIR
 ────────────────┼───────────────┼───────────┼───────┼────────────────────────────┼───────────────────────────────────
  ● perso/blog   │ main          │ ↑1 ↓1     │ ↑1 ↓1 │ 1 modifié · 1 nouveau      │
  ✓ perso/notes  │ master        │ aucun     │ =     │ propre                     │
@@ -57,7 +57,7 @@ sudo mv gitscan /usr/local/bin # ou : go install .
 
 ```
 gitscan  12 dépôts   ✗ 2 à risque   ● 7 à traiter   ✓ 3 en ordre   ~/code
-      DÉPÔT        │ BRANCHE   │ SERVEUR │ MAIN  │ LOCAL                 │ À VOIR
+      DÉPÔT        │ BRANCHE   │ vs SERVEUR │ vs MAIN │ LOCAL                 │ À VOIR
 ❯ ○ ● perso/blog   │ main      │ ↑1 ↓1   │ ↑1 ↓1 │ 1 modifié · 1 nouveau │
   ● ✗ serveur/site │ @c6e87cf  │ —       │ ↑1    │ 1 conflit             │ rebase en cours
   ○ ● ├─ portail   │ @eb37fd7  │ —       │ =     │ propre                │ décalé : le parent attend 6a3896d
@@ -135,8 +135,8 @@ gitscan -json ~/code | jq -r '.[] | select(.config.user_email == null) | .path'
 |---|---|
 | DÉPÔT | chemin ; `├─ └─` = dépôt imbriqué (sous-module) rangé sous son parent |
 | BRANCHE | branche actuelle, ou `@commit` (SHA court) en HEAD détachée ; les tags de ce commit sont listés dans À VOIR |
-| SERVEUR | branche vs sa copie distante : `↑` à pousser, `↓` à tirer, `=` à jour ; `jamais poussée`, `supprimée`, `aucun` (pas de remote), `fetch ✗` |
-| MAIN | branche vs main : `↑` commits en plus, `↓` commits de main manquants |
+| vs SERVEUR | ta branche vs sa copie distante : `↑` à pousser, `↓` à tirer, `=` à jour ; `jamais poussée`, `supprimée`, `aucun` (pas de remote), `fetch ✗` |
+| vs MAIN | ta branche vs `origin/main` (à défaut `origin/HEAD`, `origin/master`, puis la main locale) : `↑` commits en plus, `↓` commits de main manquants |
 | LOCAL | non commité : `n modifiés` (`dont n droits` = seul le chmod a changé), `n nouveaux`, `n conflits`, `n sous-modules` décalés, `stash n` |
 | À VOIR | le reste ; en terminal étroit, passe sur une ligne `↳` sous le dépôt |
 

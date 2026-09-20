@@ -108,7 +108,7 @@ func statusIcon(p palette, l Level) string {
 func renderTable(w io.Writer, repos []*Repo, rootName string, p palette, showBranches, showConfig bool, termWidth int) {
 	const sep = " │ "
 	const listSep = " · "
-	headers := []string{"DÉPÔT", "BRANCHE", "SERVEUR", "MAIN", "LOCAL", "À VOIR"}
+	headers := []string{"DÉPÔT", "BRANCHE", "vs SERVEUR", "vs MAIN", "LOCAL", "À VOIR"}
 	rows := buildTree(repos, rootName)
 	cells := make([]rowCells, len(rows))
 
@@ -382,7 +382,8 @@ func renderSummary(w io.Writer, repos []*Repo, p palette, elapsed time.Duration)
 	if len(line2) > 0 {
 		fmt.Fprintf(w, "   %s\n", strings.Join(line2, p.dim+" · "+p.reset))
 	}
-	fmt.Fprintf(w, "   %s↑ à pousser · ↓ à tirer · = à jour · @ commit ou tag (pas de branche)%s\n", p.dim, p.reset)
+	fmt.Fprintf(w, "   %s↑ à pousser · ↓ à tirer · = identique · @ commit (pas de branche)%s\n", p.dim, p.reset)
+	fmt.Fprintf(w, "   %svs SERVEUR : ta branche comparée à sa copie sur le serveur · vs MAIN : comparée à origin/main (à défaut, la main locale)%s\n", p.dim, p.reset)
 }
 
 func plural(n int, word string) string {

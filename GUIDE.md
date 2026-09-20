@@ -27,7 +27,7 @@ Il a deux modes :
 - **une interface interactive** : tu navigues au clavier et tu lances fetch, pull ou push sur plusieurs dépôts d'un coup.
 
 ```
-   DÉPÔT        │ BRANCHE       │ SERVEUR   │ MAIN  │ LOCAL                      │ À VOIR
+   DÉPÔT        │ BRANCHE       │ vs SERVEUR │ vs MAIN │ LOCAL                      │ À VOIR
 ────────────────┼───────────────┼───────────┼───────┼────────────────────────────┼───────────────────────────────────
  ● perso/blog   │ main          │ ↑1 ↓1     │ ↑1 ↓1 │ 1 modifié · 1 nouveau      │
  ✓ perso/notes  │ master        │ aucun     │ =     │ propre                     │
@@ -238,8 +238,8 @@ Tape `gitscan help` pour avoir cette explication dans le terminal.
 |---|---|
 | **DÉPÔT** | le dossier du projet. `├─` et `└─` : projet rangé dans un autre (sous-module) |
 | **BRANCHE** | la branche sur laquelle tu es. `@a1b2c3d` : tu es sur ce commit, pas sur une branche (ses tags sont dans À VOIR) |
-| **SERVEUR** | ta branche comparée au serveur : `↑2` à envoyer, `↓3` à récupérer, `=` à jour |
-| **MAIN** | ta branche comparée à `main` |
+| **vs SERVEUR** | ta branche comparée à sa copie sur le serveur : `↑2` à envoyer, `↓3` à récupérer, `=` identique |
+| **vs MAIN** | ta branche comparée à `origin/main`, la `main` du serveur (à défaut, la `main` locale) |
 | **LOCAL** | ce que tu n'as pas encore commité |
 | **À VOIR** | tout le reste qui mérite ton attention |
 
@@ -247,8 +247,8 @@ Tape `gitscan help` pour avoir cette explication dans le terminal.
 
 | Tu vois | Ça veut dire | Quoi faire |
 |---|---|---|
-| `↑2` (SERVEUR) | 2 commits pas encore envoyés | `P` (ou `git push`) |
-| `↓3` (SERVEUR) | 3 nouveaux commits sur le serveur | `p` (ou `git pull`) |
+| `↑2` (vs SERVEUR) | 2 commits pas encore envoyés | `P` (ou `git push`) |
+| `↓3` (vs SERVEUR) | 3 nouveaux commits sur le serveur | `p` (ou `git pull`) |
 | `↑1 ↓1` en rouge | tu as des commits, le serveur aussi | `git pull --rebase` à la main |
 | `jamais poussée` | la branche n'existe pas sur le serveur | `P` |
 | `supprimée` | la branche a été effacée du serveur (souvent après une PR fusionnée) | supprimer la branche locale |
