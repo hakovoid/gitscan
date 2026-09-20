@@ -136,6 +136,7 @@ type model struct {
 	query         string
 
 	scanning            bool
+	welcomed            bool // premier scan terminé : on quitte l'écran d'accueil
 	scanDone, scanTotal int
 
 	confirmOp    string
@@ -371,6 +372,7 @@ func (m *model) onPaths(msg pathsMsg) tea.Cmd {
 	m.scanning, m.scanDone, m.scanTotal = true, 0, len(msg.paths)
 	if len(msg.paths) == 0 {
 		m.scanning = false
+		m.welcomed = true
 		m.setMsg(false, "Aucun dépôt git trouvé.")
 	}
 	return tea.Batch(cmds...)
@@ -383,6 +385,7 @@ func (m *model) onOpDone(msg opDoneMsg) tea.Cmd {
 		m.scanDone++
 		if m.scanDone >= m.scanTotal {
 			m.scanning = false
+			m.welcomed = true
 		}
 	}
 	if msg.op != "scan" {
@@ -718,7 +721,32 @@ func (m *model) View() string {
 	case modeConfirm:
 		return m.viewConfirm()
 	}
+	if !m.welcomed {
+		return m.viewWelcome()
+	}
 	return m.viewList()
+}
+
+// viewWelcome : écran d'accueil affiché pendant le premier scan.
+func (m *model) viewWelcome() string {
+	status := m.spin.View() + " Recherche des dépôts…"
+	if m.scanTotal > 0 {
+		status = fmt.Sprintf("%s Analyse des dépôts  %d / %d", m.spin.View(), m.scanDone, m.scanTotal)
+		const barW = 30
+		filled := barW * m.scanDone / m.scanTotal
+		status += "\n\n" + stCyan.Render(strings.Repeat("━", filled)) + stDim.Render(strings.Repeat("━", barW-filled))
+	}
+	content := lipgloss.JoinVertical(lipgloss.Center,
+		renderBanner(m.width),
+		"",
+		stDim.Render(tagline),
+		"",
+		"",
+		stCyan.Render(status),
+		"",
+		stDim.Render(shortPath(m.root)),
+	)
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
 }
 
 func fit(s string, w int) string {
@@ -1059,15 +1087,39 @@ func (m *model) viewHelp() string {
 		{"/", "rechercher (chemin ou branche)"},
 		{"q", "quitter"},
 	}
-	var b strings.Builder
-	b.WriteString(stTitle.Render("gitscan — raccourcis") + "\n\n")
-	for _, r := range rows {
-		if r[0] == "" {
-			b.WriteString("\n")
-			continue
+	lines := func(compact bool) string {
+		var b strings.Builder
+		for _, r := range rows {
+			if r[0] == "" {
+				if !compact {
+					b.WriteString("\n")
+				}
+				continue
+			}
+			b.WriteString(fmt.Sprintf("  %s  %s\n", stKey.Render(fmt.Sprintf("%-10s", r[0])), r[1]))
 		}
-		b.WriteString(fmt.Sprintf("  %s  %s\n", stKey.Render(fmt.Sprintf("%-10s", r[0])), r[1]))
+		return strings.TrimRight(b.String(), "\n")
 	}
-	b.WriteString("\n" + stDim.Render("Une touche pour revenir."))
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, stBox.Render(b.String()))
+	back := stDim.Render("Une touche pour revenir.")
+	fitBox := func(st lipgloss.Style, content string) string {
+		if w := lipgloss.Width(content) + st.GetHorizontalFrameSize(); w > m.width {
+			st = st.Width(max(10, m.width-st.GetHorizontalBorderSize()))
+		}
+		return st.Render(content)
+	}
+
+	// Du plus confortable au plus compact, on garde la première version qui tient.
+	candidates := []string{
+		fitBox(stBox, renderBanner(m.width-8)+"\n\n"+stBold.Render("Raccourcis clavier")+"\n\n"+lines(false)+"\n\n"+back),
+		fitBox(stBox, stTitle.Render("gitscan")+stDim.Render(" — raccourcis clavier")+"\n\n"+lines(false)+"\n\n"+back),
+		fitBox(stBox.Padding(0, 1), stTitle.Render("gitscan")+stDim.Render(" — raccourcis · une touche pour revenir")+"\n"+lines(true)),
+	}
+	box := candidates[len(candidates)-1]
+	for _, c := range candidates {
+		if lipgloss.Height(c) <= m.height {
+			box = c
+			break
+		}
+	}
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 }

@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
 func main() {
 	os.Exit(run())
@@ -52,6 +52,11 @@ func run() int {
 	flag.Parse()
 
 	if *showVersion {
+		if isTerminal(os.Stdout) {
+			fmt.Println(renderBanner(0))
+			fmt.Println(stDim.Render(tagline))
+			fmt.Println()
+		}
 		fmt.Println("gitscan", version)
 		return 0
 	}
