@@ -82,6 +82,7 @@ gitscan -b ~/code           # + détail de chaque branche
 gitscan -c ~/code           # + configuration (remotes, auteur, hooks)
 gitscan -json ~/code        # sortie JSON complète
 gitscan -check ~/code       # code de sortie 1 si un dépôt demande une action
+gitscan help                # comment lire le tableau (colonnes, flèches, messages)
 ```
 
 | Option | Rôle |

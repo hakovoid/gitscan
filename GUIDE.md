@@ -155,6 +155,14 @@ Remplace `~/code` par le dossier qui contient tes projets.
 gitscan -f ~/code
 ```
 
+### Comprendre le tableau depuis le terminal
+
+```sh
+gitscan help
+```
+
+Explique chaque colonne, les flèches et tous les messages de la colonne ÉTAT.
+
 ### Les options utiles
 
 | Commande | Ce qu'elle fait |

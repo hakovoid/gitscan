@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-const version = "0.3.0"
+const version = "0.4.0"
 
 func main() {
 	os.Exit(run())
@@ -44,10 +44,14 @@ func run() int {
 		interactive  = flag.Bool("i", false, "mode interactif (TUI) : naviguer, sélectionner, fetch/pull/push en lot")
 	)
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage : gitscan [options] [dossier]\n\n")
+		fmt.Fprintf(os.Stderr, "Usage : gitscan [options] [dossier]\n        gitscan help    comment lire le tableau\n\n")
 		fmt.Fprintf(os.Stderr, "Scanne récursivement un dossier et affiche l'état de chaque dépôt git.\n\nOptions :\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nExemples :\n  gitscan ~/code\n  gitscan -i ~/code           # interface interactive\n  gitscan -f -a ~/code        # fetch puis n'afficher que ce qui demande une action\n  gitscan -b -c .             # détail des branches et de la config\n  gitscan -json ~/code | jq '.[] | select(.ahead > 0) | .path'\n")
+	}
+	if len(os.Args) > 1 && (os.Args[1] == "help" || os.Args[1] == "aide") {
+		printLegend(os.Stdout, newPalette(isTerminal(os.Stdout) && os.Getenv("NO_COLOR") == ""))
+		return 0
 	}
 	flag.Parse()
 
@@ -183,6 +187,7 @@ func run() int {
 		if !*fetch {
 			fmt.Printf("%sAstuce : -f pour faire un fetch d'abord (sinon l'état distant peut être périmé).%s\n", p.dim, p.reset)
 		}
+		fmt.Printf("%sComment lire ce tableau : gitscan help%s\n", p.dim, p.reset)
 	}
 
 	if *check {
