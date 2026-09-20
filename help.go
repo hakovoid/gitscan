@@ -80,8 +80,11 @@ func printLegend(w io.Writer, p palette) {
 	row("fetch il y a …", "(info) dernier fetch ancien : SERVEUR est peut-être périmé")
 
 	h("LES COULEURS")
-	fmt.Fprintf(w, "  %srouge%s = risque   %sjaune%s = à faire   %sgris%s = info   %svert%s = bon   %scyan%s = branche   %smagenta%s = commit ou tag\n",
-		p.red, p.reset, p.yellow, p.reset, p.dim, p.reset, p.green, p.reset, p.cyan, p.reset, p.magenta, p.reset)
+	fmt.Fprintf(w, "  %srouge%s = risque (perte possible, dépôt bloqué)   %sjaune%s = action à prévoir\n",
+		p.red, p.reset, p.yellow, p.reset)
+	fmt.Fprintf(w, "  %sgris%s = rien à faire ou information   %scyan%s = branche   %smagenta%s = commit ou tag\n",
+		p.dim, p.reset, p.cyan, p.reset, p.magenta, p.reset)
+	note("Ce qui va bien reste gris : seules les lignes à traiter se colorent.")
 
 	h("IMPORTANT")
 	note("Les chiffres SERVEUR et MAIN viennent du dernier « git fetch ».")

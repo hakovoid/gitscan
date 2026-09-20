@@ -457,9 +457,9 @@ func (r *Repo) readBranches(ctx context.Context, dir string, remotes map[string]
 
 		// Sans upstream, la branche est peut-être déjà sur le serveur sous le même
 		// nom : on la compare alors à celle-là (vrai pour la branche courante aussi).
-		if (b.Upstream == "" || b.UpstreamGone) && !b.UpstreamGone {
-			if m := matchRemote(remotes, b.Name); m != "" {
-				b.MatchRemote = m
+		if m := matchRemote(remotes, b.Name); m != "" {
+			b.MatchRemote = m
+			if b.Upstream == "" {
 				b.MatchBehind, b.MatchAhead = leftRight(ctx, dir, m, b.Name)
 			}
 		}

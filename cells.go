@@ -107,25 +107,26 @@ func buildCells(r *Repo) rowCells {
 		// Pas d'upstream, mais une branche distante du même nom : on compare avec elle.
 		switch {
 		case r.MatchAhead > 0 && r.MatchBehind > 0:
-			c.server = []seg{{fmt.Sprintf("↑%d ↓%d", r.MatchAhead, r.MatchBehind), toneErr}}
+			c.server = []seg{{fmt.Sprintf("↑%d ↓%d", r.MatchAhead, r.MatchBehind), toneWarn}}
 		case r.MatchAhead > 0:
 			c.server = []seg{{fmt.Sprintf("↑%d", r.MatchAhead), toneWarn}}
 		case r.MatchBehind > 0:
 			c.server = []seg{{fmt.Sprintf("↓%d", r.MatchBehind), toneWarn}}
 		default:
-			c.server = []seg{{"=", toneOK}}
+			c.server = []seg{{"=", toneInfo}}
 		}
 		c.server = append(c.server, seg{" (sans upstream)", toneInfo})
 	case r.Upstream == "":
 		c.server = []seg{{"jamais poussée", toneWarn}}
 	case r.Ahead > 0 && r.Behind > 0:
-		c.server = []seg{{fmt.Sprintf("↑%d ↓%d", r.Ahead, r.Behind), toneErr}}
+		c.server = []seg{{fmt.Sprintf("↑%d ↓%d", r.Ahead, r.Behind), toneWarn}}
 	case r.Ahead > 0:
 		c.server = []seg{{fmt.Sprintf("↑%d", r.Ahead), toneWarn}}
 	case r.Behind > 0:
 		c.server = []seg{{fmt.Sprintf("↓%d", r.Behind), toneWarn}}
 	default:
-		c.server = []seg{{"=", toneOK}}
+		// « tout va bien » n'a pas besoin d'attirer l'œil : l'icône ✓ le dit déjà.
+		c.server = []seg{{"=", toneInfo}}
 	}
 
 	// MAIN
@@ -133,7 +134,7 @@ func buildCells(r *Repo) rowCells {
 	case r.MainRef == "":
 		c.main = []seg{{"—", toneInfo}}
 	case r.AheadMain == 0 && r.BehindMain == 0:
-		c.main = []seg{{"=", toneOK}}
+		c.main = []seg{{"=", toneInfo}}
 	default:
 		if r.AheadMain > 0 {
 			c.main = append(c.main, seg{fmt.Sprintf("↑%d", r.AheadMain), toneNeutral})
@@ -166,7 +167,7 @@ func buildCells(r *Repo) rowCells {
 		c.local = append(c.local, seg{fmt.Sprintf("stash %d", r.Stashes), toneInfo})
 	}
 	if len(c.local) == 0 {
-		c.local = []seg{{"propre", toneOK}}
+		c.local = []seg{{"propre", toneInfo}}
 	}
 
 	// À VOIR : le reste des signaux

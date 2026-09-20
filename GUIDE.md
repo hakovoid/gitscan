@@ -222,7 +222,7 @@ Tu te déplaces dans la liste, tu coches des dépôts, puis tu appuies sur une t
 | `p` | **pull** : mettre à jour le dépôt |
 | `P` | **push** : envoyer tes commits (demande confirmation) |
 | `entrée` | voir le **détail** du dépôt (fichiers, branches, commits) |
-| `b` | dans le détail : choisir la branche dont on voit les commits |
+| `b` | liste des branches : `u` pour relier une branche au serveur, `⏎` pour voir ses commits |
 | `échap` | revenir en arrière |
 | `t` | n'afficher que ce qui demande une action |
 | `/` | rechercher un dépôt |

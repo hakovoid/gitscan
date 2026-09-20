@@ -77,7 +77,7 @@ gitscan -check -f ~/code
 | `pgup` `pgdown` | page précédente / suivante |
 | `g` / `G` | début / fin de la liste |
 | `entrée` | détail du dépôt (fichiers, branches, config, 15 derniers commits) |
-| `b` (dans le détail) | change la branche dont les commits sont affichés |
+| `b` | vue **branches** : lien avec le serveur, `u` pour relier, `⏎` pour voir les commits |
 | `échap` | revenir en arrière ; efface la recherche, puis la sélection, puis le filtre |
 | `q` | quitter (`ctrl+c` aussi) |
 | `?` | aide à l'écran |
@@ -135,6 +135,18 @@ Les actions tournent en parallèle, avec un spinner par dépôt, puis le dépôt
 
 **Flèches** : `↑3` 3 commits à pousser · `↓90` 90 à récupérer · `↑3 ↓90` divergence · `=` identique · `—` pas de comparaison possible
 
-**Couleurs** : rouge = risque · jaune = à faire · gris = info · vert = bon · cyan = branche · magenta = commit ou tag
+**Couleurs** : rouge = risque · jaune = action à prévoir · gris = rien à faire ou information · cyan = branche · magenta = commit ou tag
+
+### Vue branches (`b` dans le mode interactif)
+
+| Touche | Action |
+|---|---|
+| `↑` `↓` | naviguer |
+| `u` | relier la branche à la branche distante de même nom (`git branch -u`) |
+| `⏎` | voir les commits de cette branche |
+| `r` | rafraîchir |
+| `esc` | retour |
+
+Un `u` jaune en début de ligne marque les branches qu'il est possible de relier : sans upstream, ou reliées à une branche d'un autre nom.
 
 ⚠️ Les chiffres `vs SERVEUR` et `vs MAIN` datent du dernier `git fetch` : utilise `-f` pour les rafraîchir.

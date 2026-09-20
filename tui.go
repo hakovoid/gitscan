@@ -94,6 +94,7 @@ const (
 	modeDetail
 	modeHelp
 	modeConfirm
+	modeBranches
 )
 
 type opResult struct {
@@ -144,10 +145,12 @@ type model struct {
 	confirmOp    string
 	confirmPaths []string
 
-	detailPath string
-	detailRef  string // branche dont on affiche les commits ("" = branche courante)
-	detail     *detailData
-	vp         viewport.Model
+	detailPath   string
+	branchCursor int    // vue branches
+	wantBranches bool   // ouvrir la vue branches dès que le détail est chargé
+	detailRef    string // branche dont on affiche les commits ("" = branche courante)
+	detail       *detailData
+	vp           viewport.Model
 
 	spin   spinner.Model
 	msg    string
@@ -307,10 +310,22 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case detailMsg:
 		if msg.path == m.detailPath {
 			m.detail = &detailData{repo: msg.repo, log: msg.log, logRef: msg.logRef, files: msg.files}
+			if m.wantBranches {
+				m.wantBranches, m.mode, m.branchCursor = false, modeBranches, 0
+				m.msg = ""
+			}
 			m.replaceRepo(msg.repo)
 			m.vp.SetContent(m.renderDetail())
 		}
 		return m, nil
+
+	case linkDoneMsg:
+		if msg.err != nil {
+			m.setMsg(true, "✗ %s : %v", msg.branch, msg.err)
+		} else {
+			m.setMsg(false, "✓ %s suit maintenant %s", msg.branch, msg.remote)
+		}
+		return m, m.loadDetailCmd(msg.path)
 
 	case execDoneMsg:
 		if msg.err != nil {
@@ -336,6 +351,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case modeConfirm:
 			return m, m.keyConfirm(msg)
+		case modeBranches:
+			return m, m.keyBranches(msg)
 		case modeDetail:
 			return m, m.keyDetail(msg)
 		default:
@@ -473,6 +490,13 @@ func (m *model) keyList(msg tea.KeyMsg) tea.Cmd {
 		m.searching = true
 	case "?":
 		m.mode = modeHelp
+	case "b":
+		if r := m.current(); r != nil {
+			m.detailPath, m.detailRef, m.detail = r.AbsPath, "", nil
+			m.wantBranches = true
+			m.setMsg(false, "Chargement des branches…")
+			return m.loadDetailCmd(r.AbsPath)
+		}
 	case "enter":
 		if r := m.current(); r != nil {
 			m.mode = modeDetail
@@ -524,27 +548,8 @@ func (m *model) keyDetail(msg tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	case "b":
-		// Passe d'une branche à l'autre pour la liste des commits.
 		if m.detail != nil && len(m.detail.repo.Branches) > 0 {
-			names := make([]string, 0, len(m.detail.repo.Branches))
-			for _, b := range m.detail.repo.Branches {
-				names = append(names, b.Name)
-			}
-			i := 0
-			for j, n := range names {
-				if n == m.detailRef {
-					i = j + 1
-					break
-				}
-			}
-			if m.detailRef == "" {
-				i = 0
-			}
-			m.detailRef = ""
-			if i < len(names) {
-				m.detailRef = names[i]
-			}
-			return m.loadDetailCmd(m.detailPath)
+			m.mode, m.branchCursor = modeBranches, 0
 		}
 		return nil
 	case "s":
@@ -755,6 +760,8 @@ func (m *model) View() string {
 		return m.viewDetail()
 	case modeConfirm:
 		return m.viewConfirm()
+	case modeBranches:
+		return m.viewBranches()
 	}
 	if !m.welcomed {
 		return m.viewWelcome()
@@ -844,15 +851,27 @@ func renderSegs(segs []seg, sep string) string {
 	return strings.Join(parts, stDim.Render(sep))
 }
 
-func statusIconTUI(l Level) string {
+func statusRune(l Level) string {
 	switch l {
 	case Error:
-		return stRed.Render("✗")
+		return "✗"
 	case Warn:
-		return stYellow.Render("●")
+		return "●"
 	}
-	return stGreen.Render("✓")
+	return "✓"
 }
+
+func statusStyle(l Level) lipgloss.Style {
+	switch l {
+	case Error:
+		return stRed
+	case Warn:
+		return stYellow
+	}
+	return stGreen
+}
+
+func statusIconTUI(l Level) string { return statusStyle(l).Render(statusRune(l)) }
 
 // alertsCell : action en cours, résultat de la dernière action, puis les alertes.
 func (m *model) alertsCell(r *Repo, c rowCells) string {
@@ -937,10 +956,13 @@ func (m *model) viewList() string {
 		if m.selected[r.AbsPath] {
 			sel = stMag.Render("● ")
 		}
+		// Le nom du dépôt courant est en vidéo inverse : repérable même au milieu
+		// d'une ligne pleine de couleurs (un fond sur toute la ligne serait coupé
+		// par les réinitialisations des segments colorés).
 		name := stBold.Render(tr.name)
 		if i == m.cursor {
 			cur = stCursor.Render("❯ ")
-			name = stCursor.Render(tr.name)
+			name = stCursor.Reverse(true).Render(tr.name)
 		}
 		path := stDim.Render(tr.prefix) + name
 		line := cur + sel + statusIconTUI(c.status) + " " + strings.Join([]string{
@@ -986,7 +1008,7 @@ func (m *model) viewList() string {
 	b.WriteString(fit(strings.Join(status, "  "), m.width) + "\n")
 	b.WriteString(fit(helpLine([][2]string{
 		{"espace", "sélect."}, {"a", "tout"}, {"f", "fetch"}, {"p", "pull"}, {"P", "push"},
-		{"⏎", "détail"}, {"t", "à traiter"}, {"/", "chercher"}, {"?", "aide"}, {"q", "quitter"},
+		{"⏎", "détail"}, {"b", "branches"}, {"t", "à traiter"}, {"/", "chercher"}, {"?", "aide"}, {"q", "quitter"},
 	}), m.width))
 	return b.String()
 }
@@ -1131,6 +1153,7 @@ func (m *model) viewHelp() string {
 		{"r / R", "ré-analyser la sélection / re-scanner tout le dossier"},
 		{"", ""},
 		{"entrée", "détail : fichiers, branches, config, commits"},
+		{"b", "vue branches : lien avec le serveur, u pour relier"},
 		{"s", "ouvrir un shell dans le dépôt"},
 		{"l", "ouvrir lazygit dans le dépôt"},
 		{"", ""},
