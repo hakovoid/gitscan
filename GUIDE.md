@@ -223,6 +223,7 @@ Tu te déplaces dans la liste, tu coches des dépôts, puis tu appuies sur une t
 | `P` | **push** : envoyer tes commits (demande confirmation) |
 | `entrée` | voir le **détail** du dépôt (fichiers, branches, commits) |
 | `b` | liste des branches : `u` pour relier une branche au serveur, `⏎` pour voir ses commits |
+| `i` | explique les signaux du dépôt et donne les commandes git à lancer |
 | `échap` | revenir en arrière |
 | `t` | n'afficher que ce qui demande une action |
 | `/` | rechercher un dépôt |

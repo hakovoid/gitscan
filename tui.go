@@ -95,6 +95,7 @@ const (
 	modeHelp
 	modeConfirm
 	modeBranches
+	modeInfo
 )
 
 type opResult struct {
@@ -152,9 +153,11 @@ type model struct {
 	detail       *detailData
 	vp           viewport.Model
 
-	spin   spinner.Model
-	msg    string
-	msgErr bool
+	infoVP   viewport.Model // encadré d'explication (touche i)
+	infoBack viewMode       // vue à restaurer en fermant l'encadré
+	spin     spinner.Model
+	msg      string
+	msgErr   bool
 }
 
 func runTUI(root string, depth int, excludes map[string]bool, nested bool, opt InspectOptions, jobs int) error {
@@ -171,6 +174,7 @@ func runTUI(root string, depth int, excludes map[string]bool, nested bool, opt I
 		selected:     map[string]bool{},
 		spin:         spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(stCyan)),
 		vp:           viewport.New(80, 20),
+		infoVP:       viewport.New(80, 20),
 	}
 	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err
@@ -291,6 +295,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.vp.Width, m.vp.Height = msg.Width, max(1, msg.Height-2)
+		m.infoVP.Width, m.infoVP.Height = msg.Width-4, max(1, msg.Height-4)
 		if m.detail != nil {
 			m.vp.SetContent(m.renderDetail())
 		}
@@ -351,6 +356,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case modeConfirm:
 			return m, m.keyConfirm(msg)
+		case modeInfo:
+			return m, m.keyInfo(msg)
 		case modeBranches:
 			return m, m.keyBranches(msg)
 		case modeDetail:
@@ -490,6 +497,10 @@ func (m *model) keyList(msg tea.KeyMsg) tea.Cmd {
 		m.searching = true
 	case "?":
 		m.mode = modeHelp
+	case "i":
+		if r := m.current(); r != nil {
+			m.openInfo(r)
+		}
 	case "b":
 		if r := m.current(); r != nil {
 			m.detailPath, m.detailRef, m.detail = r.AbsPath, "", nil
@@ -545,6 +556,11 @@ func (m *model) keyDetail(msg tea.KeyMsg) tea.Cmd {
 	case "P":
 		if r != nil {
 			m.askPush([]*Repo{r})
+		}
+		return nil
+	case "i":
+		if r := m.repoByPath(m.detailPath); r != nil {
+			m.openInfo(r)
 		}
 		return nil
 	case "b":
@@ -762,6 +778,8 @@ func (m *model) View() string {
 		return m.viewConfirm()
 	case modeBranches:
 		return m.viewBranches()
+	case modeInfo:
+		return m.viewInfo()
 	}
 	if !m.welcomed {
 		return m.viewWelcome()
@@ -1008,7 +1026,7 @@ func (m *model) viewList() string {
 	b.WriteString(fit(strings.Join(status, "  "), m.width) + "\n")
 	b.WriteString(fit(helpLine([][2]string{
 		{"espace", "sélect."}, {"a", "tout"}, {"f", "fetch"}, {"p", "pull"}, {"P", "push"},
-		{"⏎", "détail"}, {"b", "branches"}, {"t", "à traiter"}, {"/", "chercher"}, {"?", "aide"}, {"q", "quitter"},
+		{"⏎", "détail"}, {"b", "branches"}, {"i", "expliquer"}, {"t", "à traiter"}, {"/", "chercher"}, {"?", "aide"}, {"q", "quitter"},
 	}), m.width))
 	return b.String()
 }
@@ -1110,7 +1128,7 @@ func (m *model) viewDetail() string {
 	}
 	footer := helpLine([][2]string{
 		{"esc", "retour"}, {"f", "fetch"}, {"p", "pull"}, {"P", "push"}, {"r", "rafraîchir"},
-		{"b", "branches"}, {"s", "shell"}, {"l", "lazygit"}, {"↑↓", "défiler"},
+		{"b", "branches"}, {"i", "expliquer"}, {"s", "shell"}, {"l", "lazygit"}, {"↑↓", "défiler"},
 	})
 	if pct := m.vp.ScrollPercent(); m.vp.TotalLineCount() > m.vp.Height {
 		footer += stDim.Render(fmt.Sprintf("   %d%%", int(pct*100)))
@@ -1154,6 +1172,7 @@ func (m *model) viewHelp() string {
 		{"", ""},
 		{"entrée", "détail : fichiers, branches, config, commits"},
 		{"b", "vue branches : lien avec le serveur, u pour relier"},
+		{"i", "expliquer les signaux du dépôt, avec les commandes git"},
 		{"s", "ouvrir un shell dans le dépôt"},
 		{"l", "ouvrir lazygit dans le dépôt"},
 		{"", ""},
@@ -1196,5 +1215,37 @@ func (m *model) viewHelp() string {
 			break
 		}
 	}
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+}
+
+// openInfo prépare l'encadré d'explication pour un dépôt.
+func (m *model) openInfo(r *Repo) {
+	m.infoVP.Width = max(20, m.width-8)
+	content := m.infoContent(r)
+	// L'encadré ne prend que la hauteur nécessaire, sans dépasser l'écran.
+	m.infoVP.Height = max(3, min(strings.Count(content, "\n")+1, m.height-6))
+	m.infoVP.SetContent(content)
+	m.infoVP.GotoTop()
+	m.infoBack = m.mode
+	m.mode = modeInfo
+}
+
+func (m *model) keyInfo(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc", "q", "i", "enter":
+		m.mode = m.infoBack
+		return nil
+	}
+	var cmd tea.Cmd
+	m.infoVP, cmd = m.infoVP.Update(msg)
+	return cmd
+}
+
+func (m *model) viewInfo() string {
+	footer := stDim.Render("↑↓ défiler · i ou échap pour fermer")
+	if m.infoVP.TotalLineCount() > m.infoVP.Height {
+		footer += stDim.Render(fmt.Sprintf("   %d%%", int(m.infoVP.ScrollPercent()*100)))
+	}
+	box := stBox.Render(m.infoVP.View() + "\n" + footer)
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 }
