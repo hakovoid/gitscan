@@ -9,13 +9,13 @@ import (
 )
 
 // Couleurs ANSI ; vides si les couleurs sont désactivées.
-type palette struct{ reset, bold, dim, red, yellow, green, cyan, blue string }
+type palette struct{ reset, bold, dim, red, yellow, green, cyan, magenta string }
 
 func newPalette(enabled bool) palette {
 	if !enabled {
 		return palette{}
 	}
-	return palette{"\033[0m", "\033[1m", "\033[2m", "\033[31m", "\033[33m", "\033[32m", "\033[36m", "\033[34m"}
+	return palette{"\033[0m", "\033[1m", "\033[2m", "\033[31m", "\033[33m", "\033[32m", "\033[36m", "\033[35m"}
 }
 
 func (p palette) level(l Level) string {
@@ -48,97 +48,203 @@ func counts(ahead, behind int) string {
 	return strings.Join(parts, " ")
 }
 
-func renderTable(w io.Writer, repos []*Repo, p palette, showBranches, showConfig bool) {
-	headers := []string{"DÉPÔT", "BRANCHE", "REMOTE", "VS MAIN", "ÉTAT"}
-	rows := make([][]cell, 0, len(repos))
+func (p palette) tone(t tone) string {
+	switch t {
+	case toneOK:
+		return p.green
+	case toneWarn:
+		return p.yellow
+	case toneErr:
+		return p.red
+	case toneInfo:
+		return p.dim
+	case toneAccent:
+		return p.cyan
+	case toneTag:
+		return p.magenta
+	}
+	return ""
+}
 
-	for _, r := range repos {
-		branch := c(p, p.cyan, r.Branch)
-		if r.Detached {
-			branch = c(p, p.yellow, detachedLabel(r))
+// segsANSI colore des segments et les complète par des espaces jusqu'à width.
+func (p palette) segs(segs []seg, sep string, width int) string {
+	var b strings.Builder
+	for i, s := range segs {
+		if i > 0 {
+			b.WriteString(p.dim + sep + p.reset)
 		}
+		if col := p.tone(s.tone); col != "" {
+			b.WriteString(col + s.text + p.reset)
+		} else {
+			b.WriteString(s.text)
+		}
+	}
+	if pad := width - widthOf(segs, sep); pad > 0 {
+		b.WriteString(strings.Repeat(" ", pad))
+	}
+	return b.String()
+}
 
-		remote := c(p, p.dim, "—")
-		switch {
-		case r.Error != "":
-		case r.UpstreamGone:
-			remote = c(p, p.yellow, "supprimé")
-		case r.Upstream != "":
-			col := p.green
-			if r.Ahead > 0 || r.Behind > 0 {
-				col = p.yellow
+func truncRunes(s string, w int) string {
+	if w > 0 && utf8.RuneCountInString(s) > w {
+		return string([]rune(s)[:max(1, w-1)]) + "…"
+	}
+	return s
+}
+
+func statusIcon(p palette, l Level) string {
+	switch l {
+	case Error:
+		return p.red + "✗" + p.reset
+	case Warn:
+		return p.yellow + "●" + p.reset
+	}
+	return p.green + "✓" + p.reset
+}
+
+// renderTable dessine le rapport : une grille avec séparateurs, une icône d'état
+// par dépôt, les dépôts imbriqués rangés sous leur parent.
+// termWidth = 0 : pas de limite (sortie redirigée).
+func renderTable(w io.Writer, repos []*Repo, rootName string, p palette, showBranches, showConfig bool, termWidth int) {
+	const sep = " │ "
+	const listSep = " · "
+	headers := []string{"DÉPÔT", "BRANCHE", "SERVEUR", "MAIN", "LOCAL", "À VOIR"}
+	rows := buildTree(repos, rootName)
+	cells := make([]rowCells, len(rows))
+
+	// Largeurs : le contenu, plafonné pour laisser de la place à « À VOIR ».
+	wid := make([]int, len(headers))
+	for i, h := range headers {
+		wid[i] = utf8.RuneCountInString(h)
+	}
+	for i, tr := range rows {
+		cells[i] = buildCells(tr.repo)
+		c := cells[i]
+		wid[0] = max(wid[0], utf8.RuneCountInString(tr.prefix+tr.name))
+		wid[1] = max(wid[1], widthOf(c.branch, ""))
+		wid[2] = max(wid[2], widthOf(c.server, ""))
+		wid[3] = max(wid[3], widthOf(c.main, " "))
+		wid[4] = max(wid[4], widthOf(c.local, listSep))
+		wid[5] = max(wid[5], widthOf(c.alerts, listSep))
+	}
+	wid[0], wid[1], wid[4] = min(wid[0], 40), min(wid[1], 26), min(wid[4], 36)
+	natural := append([]int{}, wid...)
+	lead := 3        // « ✓ » + espaces
+	stacked := false // « À VOIR » sous la ligne quand la largeur manque
+	if termWidth > 0 {
+		used := lead + wid[0] + wid[1] + wid[2] + wid[3] + wid[4] + 5*utf8.RuneCountInString(sep)
+		// Trop étroit : on réduit le chemin, la branche puis LOCAL (qui passe à la ligne)
+		// pour garder au moins 30 colonnes à « À VOIR ».
+		const minAlerts = 30
+		for _, k := range []struct{ col, floor int }{{0, 16}, {1, 12}, {4, 18}} {
+			if rest := termWidth - used - 1; rest < minAlerts {
+				d := min(minAlerts-rest, max(0, wid[k.col]-k.floor))
+				wid[k.col] -= d
+				used -= d
 			}
-			remote = c(p, col, counts(r.Ahead, r.Behind))
 		}
-
-		vsMain := c(p, p.dim, "—")
-		if r.MainRef != "" && r.Error == "" {
-			if isMainBranch(r.Branch, r.MainRef) && r.AheadMain == 0 && r.BehindMain == 0 {
-				vsMain = c(p, p.green, "=")
-			} else {
-				col := p.reset
-				if r.BehindMain > 0 {
-					col = p.yellow
+		stacked = termWidth-used-1 < minAlerts
+		if stacked {
+			// Sans colonne « À VOIR », les autres colonnes reprennent leur largeur,
+			// puis on réduit LOCAL, le chemin et la branche seulement si nécessaire.
+			copy(wid, natural)
+			used = lead + wid[0] + wid[1] + wid[2] + wid[3] + wid[4] + 4*utf8.RuneCountInString(sep)
+			for _, k := range []struct{ col, floor int }{{4, 14}, {0, 14}, {1, 10}} {
+				if over := used - (termWidth - 1); over > 0 {
+					d := min(over, max(0, wid[k.col]-k.floor))
+					wid[k.col] -= d
+					used -= d
 				}
-				vsMain = c(p, col, counts(r.AheadMain, r.BehindMain))
 			}
 		}
+		wid[5] = max(12, min(wid[5], termWidth-used-1))
+	}
+	cols := len(headers)
+	if stacked {
+		cols = 5
+	}
 
-		state := c(p, p.green, "✓ propre")
-		if len(r.Flags) > 0 {
-			var plain, styled []string
-			for _, f := range r.Flags {
-				plain = append(plain, f.Label)
-				styled = append(styled, p.level(f.Level)+f.Label+p.reset)
+	vsep := p.dim + sep + p.reset
+	rule := func() string {
+		parts := make([]string, cols)
+		for i, n := range wid[:cols] {
+			parts[i] = strings.Repeat("─", n)
+		}
+		return p.dim + strings.Repeat("─", lead) + strings.Join(parts, "─┼─") + p.reset
+	}
+
+	hdr := make([]string, cols)
+	for i, h := range headers[:cols] {
+		hdr[i] = p.bold + h + p.reset + strings.Repeat(" ", wid[i]-utf8.RuneCountInString(h))
+	}
+	fmt.Fprintln(w, strings.Repeat(" ", lead)+strings.Join(hdr, vsep))
+	fmt.Fprintln(w, rule())
+
+	for i, tr := range rows {
+		c := cells[i]
+		if tr.newGrp {
+			fmt.Fprintln(w, rule())
+		}
+		name := truncRunes(tr.prefix+tr.name, wid[0])
+		pfx := utf8.RuneCountInString(tr.prefix)
+		nameCol := p.dim + string([]rune(name)[:min(pfx, utf8.RuneCountInString(name))]) + p.reset +
+			p.bold + string([]rune(name)[min(pfx, utf8.RuneCountInString(name)):]) + p.reset +
+			strings.Repeat(" ", wid[0]-utf8.RuneCountInString(name))
+
+		branch := c.branch
+		if len(branch) == 1 {
+			branch = []seg{{truncRunes(branch[0].text, wid[1]), branch[0].tone}}
+		}
+		locals := wrapSegs(c.local, listSep, wid[4])
+		alerts := wrapSegs(c.alerts, listSep, wid[5])
+		if stacked {
+			alerts = nil
+		}
+		n := max(len(locals), len(alerts))
+		for l := 0; l < n; l++ {
+			col := func(k int, segs []seg, s string) string {
+				if l > 0 {
+					return strings.Repeat(" ", wid[k])
+				}
+				return p.segs(segs, s, wid[k])
 			}
-			state = cell{strings.Join(plain, ", "), strings.Join(styled, p.dim+", "+p.reset)}
+			lineOf := func(ls [][]seg, k int) string {
+				if l < len(ls) {
+					return p.segs(ls[l], listSep, wid[k])
+				}
+				return strings.Repeat(" ", wid[k])
+			}
+			icon, nc := " ", strings.Repeat(" ", wid[0])
+			if l == 0 {
+				icon, nc = statusIcon(p, c.status), nameCol
+			} else if len(tr.prefix) > 0 && strings.Contains(tr.prefix, "├") {
+				// continuité du trait de l'arbre sur les lignes suivantes
+				nc = p.dim + strings.Replace(strings.Replace(tr.prefix, "├─ ", "│  ", 1), "└─ ", "   ", 1) + p.reset +
+					strings.Repeat(" ", wid[0]-utf8.RuneCountInString(tr.prefix))
+			}
+			cells := []string{nc, col(1, branch, ""), col(2, c.server, ""), col(3, c.main, " "), lineOf(locals, 4)}
+			if !stacked {
+				cells = append(cells, lineOf(alerts, 5))
+			}
+			line := " " + icon + " " + strings.Join(cells, vsep)
+			fmt.Fprintln(w, strings.TrimRight(line, " "))
 		}
 
-		rows = append(rows, []cell{c(p, p.bold, r.Path), branch, remote, vsMain, state})
-	}
-
-	widths := make([]int, len(headers))
-	for i, h := range headers {
-		widths[i] = utf8.RuneCountInString(h)
-	}
-	for _, row := range rows {
-		for i, cl := range row {
-			if n := utf8.RuneCountInString(cl.plain); n > widths[i] {
-				widths[i] = n
+		indent := strings.Repeat(" ", lead+2+utf8.RuneCountInString(tr.prefix))
+		if stacked && len(c.alerts) > 0 {
+			avail := termWidth - utf8.RuneCountInString(indent) - 2
+			for _, l := range wrapSegs(c.alerts, listSep, avail) {
+				fmt.Fprintln(w, indent+p.dim+"↳ "+p.reset+p.segs(l, listSep, 0))
 			}
 		}
-	}
-
-	line := func(cells []cell) string {
-		var b strings.Builder
-		for i, cl := range cells {
-			b.WriteString(cl.styled)
-			if i < len(cells)-1 {
-				b.WriteString(strings.Repeat(" ", widths[i]-utf8.RuneCountInString(cl.plain)+2))
-			}
+		if showConfig && tr.repo.Config != nil {
+			renderConfig(w, tr.repo, p, indent)
 		}
-		return b.String()
-	}
-
-	hdr := make([]cell, len(headers))
-	for i, h := range headers {
-		hdr[i] = c(p, p.dim, h)
-	}
-	fmt.Fprintln(w, line(hdr))
-
-	indent := strings.Repeat(" ", 4)
-	for i, r := range repos {
-		fmt.Fprintln(w, line(rows[i]))
-		if showConfig && r.Config != nil {
-			renderConfig(w, r, p, indent)
-		}
-		if showBranches && len(r.Branches) > 0 {
-			renderBranches(w, r, p, indent)
-		}
-		if (showConfig || showBranches) && i < len(repos)-1 {
-			fmt.Fprintln(w)
+		if showBranches && len(tr.repo.Branches) > 0 {
+			renderBranches(w, tr.repo, p, indent)
 		}
 	}
+	fmt.Fprintln(w, rule())
 }
 
 func renderBranches(w io.Writer, r *Repo, p palette, indent string) {
@@ -228,41 +334,55 @@ func renderConfig(w io.Writer, r *Repo, p palette, indent string) {
 	}
 }
 
-func renderSummary(w io.Writer, repos []*Repo, total int, p palette, elapsed time.Duration) {
-	type stat struct {
-		label string
-		codes []string
-		color string
-	}
-	stats := []stat{
-		{"à pousser", []string{"ahead", "diverged", "no_upstream", "unpushed_branches"}, p.yellow},
-		{"à tirer", []string{"behind", "diverged"}, p.yellow},
-		{"modifié(s)", []string{"dirty", "untracked", "conflicts"}, p.yellow},
-		{"en erreur", []string{"error", "fetch_failed"}, p.red},
-	}
-	parts := []string{fmt.Sprintf("%s%d %s%s", p.bold, total, plural(total, "dépôt"), p.reset)}
-	clean := 0
+func renderSummary(w io.Writer, repos []*Repo, p palette, elapsed time.Duration) {
+	var bad, todo, ok int
 	for _, r := range repos {
-		if !r.NeedsAttention() {
-			clean++
+		switch buildCells(r).status {
+		case Error:
+			bad++
+		case Warn:
+			todo++
+		default:
+			ok++
 		}
 	}
-	for _, s := range stats {
+	count := func(codes ...string) int {
 		n := 0
 		for _, r := range repos {
-			for _, code := range s.codes {
+			for _, code := range codes {
 				if r.has(code) {
 					n++
 					break
 				}
 			}
 		}
+		return n
+	}
+
+	line1 := []string{p.bold + fmt.Sprintf("%d %s", len(repos), plural(len(repos), "dépôt")) + p.reset}
+	if bad > 0 {
+		line1 = append(line1, p.red+fmt.Sprintf("✗ %d à risque", bad)+p.reset)
+	}
+	if todo > 0 {
+		line1 = append(line1, p.yellow+fmt.Sprintf("● %d à traiter", todo)+p.reset)
+	}
+	line1 = append(line1, p.green+fmt.Sprintf("✓ %d en ordre", ok)+p.reset)
+	fmt.Fprintf(w, "   %s   %s(%s)%s\n", strings.Join(line1, "   "), p.dim, elapsed.Round(time.Millisecond), p.reset)
+
+	var line2 []string
+	add := func(n int, label string) {
 		if n > 0 {
-			parts = append(parts, fmt.Sprintf("%s%d %s%s", s.color, n, s.label, p.reset))
+			line2 = append(line2, fmt.Sprintf("%s %s%d%s", label, p.bold, n, p.reset))
 		}
 	}
-	parts = append(parts, fmt.Sprintf("%s%d %s%s", p.green, clean, plural(clean, "propre"), p.reset))
-	fmt.Fprintf(w, "\n%s  %s(%s)%s\n", strings.Join(parts, " · "), p.dim, elapsed.Round(time.Millisecond), p.reset)
+	add(count("ahead", "diverged", "no_upstream", "unpushed_branches"), "à pousser")
+	add(count("behind", "diverged"), "à tirer")
+	add(count("dirty", "untracked", "conflicts"), "modifiés")
+	add(count("submodule_drift"), "sous-modules décalés")
+	if len(line2) > 0 {
+		fmt.Fprintf(w, "   %s\n", strings.Join(line2, p.dim+" · "+p.reset))
+	}
+	fmt.Fprintf(w, "   %s↑ à pousser · ↓ à tirer · = à jour · @ commit ou tag (pas de branche)%s\n", p.dim, p.reset)
 }
 
 func plural(n int, word string) string {

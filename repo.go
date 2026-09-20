@@ -28,11 +28,24 @@ type Repo struct {
 	AheadMain  int    `json:"ahead_main"`         // commits de la branche absents de main
 	BehindMain int    `json:"behind_main"`        // commits de main absents de la branche
 
+	Changed   int `json:"changed"`   // fichiers suivis modifiés (indexés ou non), comptés une fois
+	ModeOnly  int `json:"mode_only"` // parmi eux : seuls les droits (chmod) ont changé
 	Staged    int `json:"staged"`
 	Modified  int `json:"modified"`
 	Untracked int `json:"untracked"`
 	Conflicts int `json:"conflicts"`
 	Stashes   int `json:"stashes"`
+
+	NoRemote          bool   `json:"no_remote,omitempty"`          // aucun remote configuré
+	SubmodulesChanged int    `json:"submodules_changed,omitempty"` // sous-modules dont le commit a bougé
+	Operation         string `json:"operation,omitempty"`          // rebase, merge, cherry-pick… en cours
+	OrphanCommits     int    `json:"orphan_commits,omitempty"`     // commits sur HEAD détachée hors de toute branche
+
+	// Sous-module : le dépôt parent attend un commit précis.
+	Submodule    bool   `json:"submodule,omitempty"`
+	SuperProject string `json:"superproject,omitempty"`
+	SubExpected  string `json:"sub_expected,omitempty"` // commit attendu par le parent (court)
+	SubInSync    bool   `json:"sub_in_sync,omitempty"`
 
 	Branches []Branch `json:"branches,omitempty"`
 	// Branches locales (hors courante) avec du travail non poussé.
@@ -110,10 +123,21 @@ func inspect(ctx context.Context, root, path string, opt InspectOptions) *Repo {
 		r.computeFlags()
 		return r
 	}
+	r.readModeOnly(ctx, path)
 	r.readStash(ctx, path)
-	r.readLastFetch(ctx, path)
+	r.readGitDir(ctx, path)
+	r.readSubmodule(ctx, path)
+	if r.Upstream == "" && !r.Detached {
+		if out, err := runGit(ctx, path, "remote"); err == nil && strings.TrimSpace(out) == "" {
+			r.NoRemote = true
+		}
+	}
 	r.MainRef = detectMain(ctx, path, opt.MainOverride)
 	if r.Detached {
+		// Commits faits en HEAD détachée qu'aucune branche, aucun tag ne contient : perdables.
+		if out, err := runGit(ctx, path, "rev-list", "--count", "HEAD", "--not", "--branches", "--remotes", "--tags"); err == nil {
+			r.OrphanCommits, _ = strconv.Atoi(strings.TrimSpace(out))
+		}
 		if out, err := runGit(ctx, path, "describe", "--tags", "--always"); err == nil {
 			r.HeadDesc = strings.TrimSpace(out)
 		}
@@ -157,7 +181,14 @@ func (r *Repo) readStatus(ctx context.Context, dir string) error {
 				r.Behind, _ = strconv.Atoi(strings.TrimPrefix(f[1], "-"))
 			}
 		case strings.HasPrefix(line, "1 "), strings.HasPrefix(line, "2 "):
+			// Format : « 1 XY sub mH mI mW hH hI chemin » ; sub commence par S pour un sous-module.
+			f := strings.Fields(line)
+			if len(f) >= 3 && strings.HasPrefix(f[2], "S") {
+				r.SubmodulesChanged++
+				continue
+			}
 			if len(line) >= 4 {
+				r.Changed++
 				if line[2] != '.' {
 					r.Staged++
 				}
@@ -185,16 +216,97 @@ func (r *Repo) readStash(ctx context.Context, dir string) {
 	}
 }
 
-// readLastFetch lit la date de FETCH_HEAD pour savoir si les infos distantes sont fraîches.
-func (r *Repo) readLastFetch(ctx context.Context, dir string) {
-	gitDir, err := runGit(ctx, dir, "rev-parse", "--absolute-git-dir")
+// readGitDir regarde dans le dossier .git : date du dernier fetch et opération
+// interrompue (rebase, merge…).
+func (r *Repo) readGitDir(ctx context.Context, dir string) {
+	out, err := runGit(ctx, dir, "rev-parse", "--absolute-git-dir", "--git-common-dir")
 	if err != nil {
 		return
 	}
-	if st, err := os.Stat(filepath.Join(strings.TrimSpace(gitDir), "FETCH_HEAD")); err == nil {
-		t := st.ModTime()
-		r.LastFetch = &t
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	gitDir, common := lines[0], lines[0]
+	if len(lines) > 1 {
+		common = lines[1]
+		if !filepath.IsAbs(common) {
+			common = filepath.Join(dir, common)
+		}
 	}
+	exists := func(name string) bool {
+		_, err := os.Stat(filepath.Join(gitDir, name))
+		return err == nil
+	}
+	for _, d := range []string{gitDir, common} {
+		if st, err := os.Stat(filepath.Join(d, "FETCH_HEAD")); err == nil {
+			t := st.ModTime()
+			r.LastFetch = &t
+			break
+		}
+	}
+	switch {
+	case exists("rebase-merge"), exists("rebase-apply"):
+		r.Operation = "rebase"
+	case exists("MERGE_HEAD"):
+		r.Operation = "merge"
+	case exists("CHERRY_PICK_HEAD"):
+		r.Operation = "cherry-pick"
+	case exists("REVERT_HEAD"):
+		r.Operation = "revert"
+	case exists("BISECT_LOG"):
+		r.Operation = "bisect"
+	}
+}
+
+// readModeOnly compte les fichiers dont seuls les droits ont changé (chmod), cas
+// fréquent sur un serveur web : on relance status en ignorant les droits.
+func (r *Repo) readModeOnly(ctx context.Context, dir string) {
+	if r.Changed == 0 {
+		return
+	}
+	out, err := runGit(ctx, dir, "-c", "core.fileMode=false", "status", "--porcelain=v2", "--untracked-files=no")
+	if err != nil {
+		return
+	}
+	n := 0
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, "1 ") || strings.HasPrefix(line, "2 ") {
+			if f := strings.Fields(line); len(f) >= 3 && !strings.HasPrefix(f[2], "S") {
+				n++
+			}
+		}
+	}
+	r.ModeOnly = max(0, r.Changed-n)
+}
+
+// readSubmodule : si le dépôt est un sous-module, compare son commit à celui
+// qu'attend le dépôt parent.
+func (r *Repo) readSubmodule(ctx context.Context, dir string) {
+	if st, err := os.Stat(filepath.Join(dir, ".git")); err != nil || st.IsDir() {
+		return // un sous-module a un fichier .git, pas un dossier
+	}
+	out, err := runGit(ctx, dir, "rev-parse", "--show-superproject-working-tree")
+	parent := strings.TrimSpace(out)
+	if err != nil || parent == "" {
+		return
+	}
+	r.Submodule, r.SuperProject = true, parent
+	abs, _ := filepath.Abs(dir)
+	rel, err := filepath.Rel(parent, abs)
+	if err != nil {
+		return
+	}
+	// « 160000 commit <sha>\t<chemin> »
+	out, err = runGit(ctx, parent, "ls-tree", "HEAD", "--", rel)
+	f := strings.Fields(out)
+	if err != nil || len(f) < 3 {
+		return
+	}
+	expected := f[2]
+	head, err := runGit(ctx, dir, "rev-parse", "HEAD")
+	if err != nil {
+		return
+	}
+	r.SubExpected = expected[:min(7, len(expected))]
+	r.SubInSync = strings.TrimSpace(head) == expected
 }
 
 // detectMain trouve la branche de référence : de préférence la version distante

@@ -33,7 +33,7 @@ func (r *Repo) add(code string, lvl Level, format string, a ...any) {
 }
 
 func (r *Repo) computeFlags() {
-	r.Flags = nil
+	r.Flags = []Flag{}
 	if r.Error != "" {
 		r.add("error", Error, "erreur : %s", r.Error)
 		return
@@ -41,16 +41,41 @@ func (r *Repo) computeFlags() {
 	if r.FetchError != "" {
 		r.add("fetch_failed", Warn, "fetch échoué")
 	}
+	if r.Operation != "" {
+		r.add("operation", Error, "%s en cours", r.Operation)
+	}
+	if r.OrphanCommits > 0 {
+		r.add("orphan_commits", Error, "%s hors branche", plur(r.OrphanCommits, "commit", "commits"))
+	}
 	if r.Conflicts > 0 {
 		r.add("conflicts", Error, "conflits %d", r.Conflicts)
 	}
-	if r.Staged+r.Modified > 0 {
-		r.add("dirty", Warn, "modifié %d", r.Staged+r.Modified)
+	switch {
+	case r.Changed > 0 && r.ModeOnly == r.Changed:
+		// Seuls les droits ont changé : contenu identique, rien de perdu.
+		r.add("mode_only", Info, "droits modifiés %d (contenu identique)", r.ModeOnly)
+	case r.ModeOnly > 0:
+		r.add("dirty", Warn, "modifié %d (dont %d droits seuls)", r.Changed, r.ModeOnly)
+	case r.Changed > 0:
+		r.add("dirty", Warn, "modifié %d", r.Changed)
+	}
+	if r.SubmodulesChanged > 0 {
+		r.add("submodules_changed", Warn, "%d sous-module(s) décalé(s)", r.SubmodulesChanged)
+	}
+	if r.Submodule {
+		switch {
+		case r.SubExpected == "":
+			r.add("submodule_new", Info, "sous-module absent du commit parent")
+		case !r.SubInSync:
+			r.add("submodule_drift", Warn, "décalé : le parent attend %s", r.SubExpected)
+		}
 	}
 	if r.Untracked > 0 {
 		r.add("untracked", Warn, "non suivi %d", r.Untracked)
 	}
 	switch {
+	case r.Detached && r.Submodule:
+		// Normal pour un sous-module : il est figé sur le commit choisi par le parent.
 	case r.Detached && r.HeadOnTag:
 		// Courant pour un déploiement : on est sur une version taguée.
 		r.add("detached", Info, "sur le tag %s", r.HeadDesc)
@@ -58,6 +83,8 @@ func (r *Repo) computeFlags() {
 		r.add("detached", Warn, "HEAD détachée")
 	case r.UpstreamGone:
 		r.add("upstream_gone", Warn, "upstream supprimé")
+	case r.Upstream == "" && r.NoRemote:
+		r.add("no_remote", Info, "aucun remote")
 	case r.Upstream == "":
 		r.add("no_upstream", Warn, "jamais poussée")
 	case r.Ahead > 0 && r.Behind > 0:
@@ -123,12 +150,4 @@ func humanAge(d time.Duration) string {
 	default:
 		return fmt.Sprintf("%d ans", int(d.Hours()/24/365))
 	}
-}
-
-// detachedLabel : pour une HEAD détachée, le tag ou le commit, ex. « @v1.2.3 » ou « @a1b2c3d ».
-func detachedLabel(r *Repo) string {
-	if r.HeadDesc == "" {
-		return "(détachée)"
-	}
-	return "@" + r.HeadDesc
 }

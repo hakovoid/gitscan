@@ -27,11 +27,29 @@ Il a deux modes :
 - **une interface interactive** : tu navigues au clavier et tu lances fetch, pull ou push sur plusieurs dépôts d'un coup.
 
 ```
-DÉPÔT        BRANCHE        REMOTE    VS MAIN  ÉTAT
-perso/blog   main           ↑1 ↓1     ↑1 ↓1    modifié 1, divergé ↑1 ↓1
-work/api     main           =         =        ✓ propre
-work/infra   main           ↓3        ↓3       à tirer ↓3
-work/web     main           ↑2        ↑2       à pousser ↑2
+   DÉPÔT        │ BRANCHE       │ SERVEUR   │ MAIN  │ LOCAL                      │ À VOIR
+────────────────┼───────────────┼───────────┼───────┼────────────────────────────┼───────────────────────────────────
+ ● perso/blog   │ main          │ ↑1 ↓1     │ ↑1 ↓1 │ 1 modifié · 1 nouveau      │
+ ✓ perso/notes  │ master        │ aucun     │ =     │ propre                     │
+────────────────┼───────────────┼───────────┼───────┼────────────────────────────┼───────────────────────────────────
+ ● serveur/docs │ main          │ =         │ =     │ 3 modifiés · dont 2 droits │
+────────────────┼───────────────┼───────────┼───────┼────────────────────────────┼───────────────────────────────────
+ ✗ serveur/site │ @c6e87cf      │ —         │ ↑1    │ 1 conflit · 2 sous-modules │ rebase en cours
+                │               │           │       │                            │ non poussée(s) : tmp
+ ✓ ├─ mobile    │ @6a3896d      │ —         │ =     │ propre                     │ sous-module ✓
+ ● ├─ portail   │ @eb37fd7      │ —         │ =     │ propre                     │ décalé : le parent attend 6a3896d
+ ✗ └─ webform   │ @0dad4ed      │ —         │ ↑1    │ propre                     │ 1 commit hors branche
+                │               │           │       │                            │ décalé : le parent attend 6a3896d
+────────────────┼───────────────┼───────────┼───────┼────────────────────────────┼───────────────────────────────────
+ ✓ work/api     │ main          │ =         │ =     │ propre                     │
+ ● work/app     │ feature/login │ =         │ ↑1 ↓4 │ stash 1                    │ non poussée(s) : experiment
+ ● work/infra   │ main          │ ↓3        │ ↓3    │ propre                     │
+ ● work/lib     │ feature/old   │ supprimée │ ↑1    │ propre                     │
+ ● work/web     │ main          │ ↑2        │ ↑2    │ 1 nouveau                  │
+────────────────┼───────────────┼───────────┼───────┼────────────────────────────┼───────────────────────────────────
+   12 dépôts   ✗ 2 à risque   ● 7 à traiter   ✓ 3 en ordre   (159ms)
+   à pousser 4 · à tirer 2 · modifiés 4 · sous-modules décalés 2
+   ↑ à pousser · ↓ à tirer · = à jour · @ commit ou tag (pas de branche)
 ```
 
 ---
@@ -161,7 +179,7 @@ gitscan -f ~/code
 gitscan help
 ```
 
-Explique chaque colonne, les flèches et tous les messages de la colonne ÉTAT.
+Explique l'icône en début de ligne, chaque colonne, les flèches et chaque message.
 
 ### Les options utiles
 
@@ -204,22 +222,48 @@ Si aucun dépôt n'est coché, l'action s'applique au dépôt sous le curseur.
 
 ## Comprendre ce qui s'affiche
 
+Tape `gitscan help` pour avoir cette explication dans le terminal.
+
+### L'icône en début de ligne
+
+| Icône | Signification |
+|---|---|
+| `✓` vert | en ordre, rien à faire |
+| `●` jaune | une action est à prévoir |
+| `✗` rouge | **à risque** : du travail peut se perdre, ou une opération est bloquée |
+
+### Les colonnes
+
+| Colonne | Ce qu'elle dit |
+|---|---|
+| **DÉPÔT** | le dossier du projet. `├─` et `└─` : projet rangé dans un autre (sous-module) |
+| **BRANCHE** | la branche sur laquelle tu es. `@a1b2c3d` ou `@v1.4.2` : tu es sur un commit ou un tag, pas sur une branche |
+| **SERVEUR** | ta branche comparée au serveur : `↑2` à envoyer, `↓3` à récupérer, `=` à jour |
+| **MAIN** | ta branche comparée à `main` |
+| **LOCAL** | ce que tu n'as pas encore commité |
+| **À VOIR** | tout le reste qui mérite ton attention |
+
+### Les messages et quoi faire
+
 | Tu vois | Ça veut dire | Quoi faire |
 |---|---|---|
-| `✓ propre` | tout est à jour | rien 🎉 |
-| `à pousser ↑2` | 2 commits pas encore envoyés | `P` (ou `git push`) |
-| `à tirer ↓3` | 3 nouveaux commits sur le serveur | `p` (ou `git pull`) |
-| `divergé ↑1 ↓1` | tu as des commits, le serveur aussi | `git pull --rebase` à la main |
-| `modifié 2` | fichiers modifiés, non commités | commiter ou annuler |
-| `non suivi 1` | nouveaux fichiers jamais ajoutés à git | `git add` ou les ignorer |
-| `jamais poussée` | la branche n'existe pas encore sur le serveur | `P` |
-| `upstream supprimé` | la branche a été supprimée du serveur (souvent après une PR fusionnée) | supprimer la branche locale |
-| `retard main ↓4` | `main` a avancé depuis ta branche | mettre ta branche à jour si besoin |
-| `non poussée(s) : dev, fix` | ces branches ont des commits qui ne sont pas sur le serveur | les pousser, ou les supprimer si elles sont inutiles |
-| `@v1.4.2` (colonne BRANCHE) | tu n'es sur aucune branche, mais sur le tag v1.4.2 (courant sur un serveur) | rien, si c'est voulu |
+| `↑2` (SERVEUR) | 2 commits pas encore envoyés | `P` (ou `git push`) |
+| `↓3` (SERVEUR) | 3 nouveaux commits sur le serveur | `p` (ou `git pull`) |
+| `↑1 ↓1` en rouge | tu as des commits, le serveur aussi | `git pull --rebase` à la main |
+| `jamais poussée` | la branche n'existe pas sur le serveur | `P` |
+| `supprimée` | la branche a été effacée du serveur (souvent après une PR fusionnée) | supprimer la branche locale |
+| `2 modifiés` | fichiers modifiés, non commités | commiter ou annuler |
+| `dont 2 droits` | pour ces fichiers, seuls les droits (chmod) ont changé, pas le contenu | rien, ou `git config core.fileMode false` |
+| `1 nouveau` | fichier jamais ajouté à git | `git add`, ou l'ignorer |
 | `stash 1` | du travail mis de côté avec `git stash` | le récupérer ou le supprimer |
+| `rebase en cours` ✗ | une opération git a été interrompue | la terminer (`git rebase --continue`) ou l'annuler (`--abort`) |
+| `1 commit hors branche` ✗ | un commit fait sans branche : **il peut se perdre** | `git branch sauvegarde` pour le garder |
+| `décalé : le parent attend …` | le sous-module n'est pas sur la version prévue par le projet parent | `git submodule update` depuis le parent (si c'est voulu) |
+| `sous-module ✓` | le sous-module est sur la bonne version | rien |
+| `non poussée(s) : dev, fix` | ces branches ont des commits qui ne sont pas sur le serveur | les pousser, ou les supprimer si inutiles |
+| `sur le tag v1.4.2` | version taguée (courant sur un serveur) | rien, si c'est voulu |
 
-Couleurs : **rouge** = problème · **jaune** = action à faire · **gris** = pour info.
+Couleurs : **rouge** = risque · **jaune** = à faire · **gris** = info · **vert** = bon · **cyan** = branche · **magenta** = commit ou tag.
 
 ---
 

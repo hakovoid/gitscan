@@ -20,16 +20,29 @@ Scanne un dossier (et ses sous-dossiers), trouve tous les dépôts git et affich
 Deux modes : un **rapport** en ligne de commande (scriptable, JSON) et une **interface interactive** (`-i`) pour agir en lot : fetch, pull, push.
 
 ```
-DÉPÔT        BRANCHE        REMOTE    VS MAIN  ÉTAT
-perso/blog   main           ↑1 ↓1     ↑1 ↓1    modifié 1, non suivi 1, divergé ↑1 ↓1
-perso/notes  master         —         =        jamais poussée
-work/api     main           =         =        ✓ propre
-work/app     feature/login  =         ↑1 ↓4    1 branche(s) non poussée(s), retard main ↓4, stash 1
-work/infra   main           ↓3        ↓3       à tirer ↓3
-work/lib     feature/old    supprimé  ↑1       upstream supprimé
-work/web     main           ↑2        ↑2       non suivi 1, à pousser ↑2
-
-7 dépôts · 4 à pousser · 2 à tirer · 2 modifié(s) · 1 propre  (79ms)
+   DÉPÔT        │ BRANCHE       │ SERVEUR   │ MAIN  │ LOCAL                      │ À VOIR
+────────────────┼───────────────┼───────────┼───────┼────────────────────────────┼───────────────────────────────────
+ ● perso/blog   │ main          │ ↑1 ↓1     │ ↑1 ↓1 │ 1 modifié · 1 nouveau      │
+ ✓ perso/notes  │ master        │ aucun     │ =     │ propre                     │
+────────────────┼───────────────┼───────────┼───────┼────────────────────────────┼───────────────────────────────────
+ ● serveur/docs │ main          │ =         │ =     │ 3 modifiés · dont 2 droits │
+────────────────┼───────────────┼───────────┼───────┼────────────────────────────┼───────────────────────────────────
+ ✗ serveur/site │ @c6e87cf      │ —         │ ↑1    │ 1 conflit · 2 sous-modules │ rebase en cours
+                │               │           │       │                            │ non poussée(s) : tmp
+ ✓ ├─ mobile    │ @6a3896d      │ —         │ =     │ propre                     │ sous-module ✓
+ ● ├─ portail   │ @eb37fd7      │ —         │ =     │ propre                     │ décalé : le parent attend 6a3896d
+ ✗ └─ webform   │ @0dad4ed      │ —         │ ↑1    │ propre                     │ 1 commit hors branche
+                │               │           │       │                            │ décalé : le parent attend 6a3896d
+────────────────┼───────────────┼───────────┼───────┼────────────────────────────┼───────────────────────────────────
+ ✓ work/api     │ main          │ =         │ =     │ propre                     │
+ ● work/app     │ feature/login │ =         │ ↑1 ↓4 │ stash 1                    │ non poussée(s) : experiment
+ ● work/infra   │ main          │ ↓3        │ ↓3    │ propre                     │
+ ● work/lib     │ feature/old   │ supprimée │ ↑1    │ propre                     │
+ ● work/web     │ main          │ ↑2        │ ↑2    │ 1 nouveau                  │
+────────────────┼───────────────┼───────────┼───────┼────────────────────────────┼───────────────────────────────────
+   12 dépôts   ✗ 2 à risque   ● 7 à traiter   ✓ 3 en ordre   (159ms)
+   à pousser 4 · à tirer 2 · modifiés 4 · sous-modules décalés 2
+   ↑ à pousser · ↓ à tirer · = à jour · @ commit ou tag (pas de branche)
 ```
 
 ## Installation
@@ -43,13 +56,13 @@ sudo mv gitscan /usr/local/bin # ou : go install .
 ## Mode interactif (`gitscan -i`)
 
 ```
-gitscan  8 dépôts · 3 à pousser · 1 à tirer · 2 modifié(s) · 3 propres   ~/code
-    DÉPÔT        BRANCHE        REMOTE    VS MAIN    ÉTAT
-  ○ perso/blog   main           ↑1 ↓1     ↑1 ↓1      modifié 1, non suivi 1, divergé ↑1 ↓1
-  ● perso/notes  master         —         =          ✗ push : aucun remote configuré, jamais poussée
-❯ ○ work/infra   main           =         =          ✓ pull, ✓ propre
-  ● work/web     main           =         =          ✓ push, non suivi 1
-2 sélectionné(s)  ✓ push work/web
+gitscan  12 dépôts   ✗ 2 à risque   ● 7 à traiter   ✓ 3 en ordre   ~/code
+      DÉPÔT        │ BRANCHE   │ SERVEUR │ MAIN  │ LOCAL                 │ À VOIR
+❯ ○ ● perso/blog   │ main      │ ↑1 ↓1   │ ↑1 ↓1 │ 1 modifié · 1 nouveau │
+  ● ✗ serveur/site │ @c6e87cf  │ —       │ ↑1    │ 1 conflit             │ rebase en cours
+  ○ ● ├─ portail   │ @eb37fd7  │ —       │ =     │ propre                │ décalé : le parent attend 6a3896d
+  ○ ✗ └─ webform   │ @0dad4ed  │ —       │ ↑1    │ propre                │ 1 commit hors branche
+1 sélectionné(s)
 espace sélect. · a tout · f fetch · p pull · P push · ⏎ détail · t à traiter · / chercher · ? aide · q quitter
 ```
 
@@ -112,29 +125,38 @@ gitscan -json ~/code | jq -r '.[] | .path as $p | .branches[] | select(.merged_i
 gitscan -json ~/code | jq -r '.[] | select(.config.user_email == null) | .path'
 ```
 
-## Lecture des signaux
+## Lecture du tableau
 
-| Signal | Niveau | Signification |
+`gitscan help` affiche cette légende dans le terminal.
+
+**Icône** : `✓` en ordre · `●` à traiter · `✗` à risque (du travail peut se perdre, ou une opération est bloquée).
+
+| Colonne | Contenu |
+|---|---|
+| DÉPÔT | chemin ; `├─ └─` = dépôt imbriqué (sous-module) rangé sous son parent |
+| BRANCHE | branche actuelle, ou `@commit` / `@tag` en HEAD détachée |
+| SERVEUR | branche vs sa copie distante : `↑` à pousser, `↓` à tirer, `=` à jour ; `jamais poussée`, `supprimée`, `aucun` (pas de remote), `fetch ✗` |
+| MAIN | branche vs main : `↑` commits en plus, `↓` commits de main manquants |
+| LOCAL | non commité : `n modifiés` (`dont n droits` = seul le chmod a changé), `n nouveaux`, `n conflits`, `n sous-modules` décalés, `stash n` |
+| À VOIR | le reste ; en terminal étroit, passe sur une ligne `↳` sous le dépôt |
+
+| Signal (À VOIR) | Niveau | Signification |
 |---|---|---|
-| `à pousser ↑n` | action | n commits locaux absents du remote |
-| `à tirer ↓n` | action | n commits distants à récupérer |
-| `divergé ↑a ↓b` | action | les deux : il faudra rebase ou merge |
-| `modifié n` / `non suivi n` | action | travail non commité |
-| `conflits n` | erreur | merge ou rebase en cours |
-| `jamais poussée` | action | la branche courante n'a pas d'upstream |
-| `upstream supprimé` | action | la branche distante a disparu (souvent : PR fusionnée) |
-| `non poussée(s) : x, y` | action | d'autres branches locales ont des commits absents du remote (au-delà de 3 : `n branches non poussées`, détail avec `-b`) |
-| `HEAD détachée` | action | pas sur une branche ; la colonne BRANCHE affiche le commit (`@a1b2c3d`) |
+| `rebase en cours` (merge, cherry-pick, revert, bisect) | risque | opération interrompue, à terminer ou annuler |
+| `n commits hors branche` | risque | commits faits en HEAD détachée, sur aucune branche ni tag : perdables (`git branch sauvegarde` pour les garder) |
+| `HEAD détachée` | à traiter | aucune branche (ne s'affiche pas pour un sous-module ou un tag, où c'est normal) |
+| `décalé : le parent attend x` | à traiter | sous-module pas sur le commit enregistré par son dépôt parent |
+| `sous-module ✓` | info | sous-module sur le commit attendu |
+| `non poussée(s) : a, b` | à traiter | autres branches locales avec des commits absents du serveur (au-delà de 3 : `n branches non poussées`) |
 | `sur le tag v1.4.2` | info | HEAD détachée sur un tag : normal pour un déploiement |
-| `retard main ↓n` | info | main a avancé depuis la création de la branche |
-| `stash n` | info | des stash traînent |
-| `fetch il y a …` | info | dernier fetch de plus de 7 jours |
+| `fetch il y a …` | info | dernier fetch de plus de 7 jours : SERVEUR est peut-être périmé |
 
-Colonne **VS MAIN** : `↑` = commits de la branche absents de main, `↓` = commits de main absents de la branche.
+Les dépôts dont seuls les **droits** ont changé (cas fréquent sur un serveur après un `chmod -R`) sont signalés à part. Si c'est voulu : `git config core.fileMode false` dans le dépôt.
 
 ## Fonctionnement
 
 - Découverte : parcours récursif ; un dossier contenant `.git` (dossier ou fichier, donc worktrees et submodules compris) est un dépôt. On ne descend pas dedans, sauf avec `-nested`.
+- Sous-modules : détectés via `git rev-parse --show-superproject-working-tree`, puis comparés au commit enregistré par le parent (`git ls-tree HEAD`). Commits hors branche : `git rev-list HEAD --not --branches --remotes --tags`. Droits seuls : second `git status` avec `core.fileMode=false`.
 - Chaque dépôt est analysé par un pool de goroutines. L'essentiel vient d'un seul `git status --porcelain=v2 --branch`, complété par `for-each-ref` (branches) et `rev-list --left-right --count` (comparaison avec main).
 - La TUI suit l'architecture Elm de Bubble Tea : un modèle (état), `Update` (réagit aux touches et aux résultats git), `View` (dessine l'écran). Voir `tui.go`.
 - Les commandes git tournent avec `GIT_TERMINAL_PROMPT=0` (jamais bloqué par une demande de mot de passe) et `GIT_OPTIONAL_LOCKS=0` (n'interfère pas avec un éditeur ouvert).

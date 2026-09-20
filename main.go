@@ -17,9 +17,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	xterm "github.com/charmbracelet/x/term"
 )
 
-const version = "0.5.0"
+const version = "0.6.0"
 
 func main() {
 	os.Exit(run())
@@ -181,21 +183,21 @@ func run() int {
 		if len(shown) == 0 {
 			fmt.Printf("%s✓ Tous les dépôts sont propres et à jour.%s\n", p.green, p.reset)
 		} else {
-			renderTable(os.Stdout, shown, p, *branches, *config)
+			renderTable(os.Stdout, shown, filepath.Base(root), p, *branches, *config, termWidth())
 		}
-		renderSummary(os.Stdout, repos, len(repos), p, time.Since(start))
+		renderSummary(os.Stdout, repos, p, time.Since(start))
 		if !*fetch {
-			fmt.Printf("%sAstuce : -f pour faire un fetch d'abord (sinon l'état distant peut être périmé).%s\n", p.dim, p.reset)
+			fmt.Printf("%sAstuce : -f pour faire un fetch d'abord (sinon SERVEUR peut être périmé).%s\n", p.dim, p.reset)
 		}
 		var more []string
 		if !*branches {
-			more = append(more, "-b toutes les branches")
+			more = append(more, "-b branches")
 		}
 		if !*config {
 			more = append(more, "-c config")
 		}
-		more = append(more, "gitscan help pour lire le tableau")
-		fmt.Printf("%sPlus de détails : %s%s\n", p.dim, strings.Join(more, " · "), p.reset)
+		more = append(more, "gitscan help (légende)")
+		fmt.Printf("%sDétails : %s%s\n", p.dim, strings.Join(more, " · "), p.reset)
 	}
 
 	if *check {
@@ -211,4 +213,15 @@ func run() int {
 func isTerminal(f *os.File) bool {
 	st, err := f.Stat()
 	return err == nil && st.Mode()&os.ModeCharDevice != 0
+}
+
+// termWidth : largeur du terminal, 0 si la sortie est redirigée.
+func termWidth() int {
+	if !isTerminal(os.Stdout) {
+		return 0
+	}
+	if w, _, err := xterm.GetSize(os.Stdout.Fd()); err == nil && w > 0 {
+		return w
+	}
+	return 0
 }

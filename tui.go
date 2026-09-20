@@ -669,9 +669,9 @@ func (m *model) visible() []*Repo {
 }
 
 func (m *model) current() *Repo {
-	vis := m.visible()
-	if m.cursor >= 0 && m.cursor < len(vis) {
-		return vis[m.cursor]
+	rows := m.visibleRows()
+	if m.cursor >= 0 && m.cursor < len(rows) {
+		return rows[m.cursor].repo
 	}
 	return nil
 }
@@ -758,72 +758,69 @@ func fit(s string, w int) string {
 }
 
 func (m *model) summary() string {
-	var push, pull, dirty, errs, clean int
+	var bad, todo, ok int
 	for _, r := range m.repos {
 		if r.Branch == "" && r.Error == "" {
-			continue
+			continue // pas encore analysé
 		}
-		if r.has("ahead") || r.has("diverged") || r.has("no_upstream") || r.has("unpushed_branches") {
-			push++
-		}
-		if r.has("behind") || r.has("diverged") {
-			pull++
-		}
-		if r.has("dirty") || r.has("untracked") || r.has("conflicts") {
-			dirty++
-		}
-		if r.has("error") || r.has("fetch_failed") {
-			errs++
-		}
-		if !r.NeedsAttention() {
-			clean++
+		switch buildCells(r).status {
+		case Error:
+			bad++
+		case Warn:
+			todo++
+		default:
+			ok++
 		}
 	}
 	parts := []string{stBold.Render(fmt.Sprintf("%d %s", len(m.repos), plural(len(m.repos), "dépôt")))}
-	add := func(n int, label string, st lipgloss.Style) {
-		if n > 0 {
-			parts = append(parts, st.Render(fmt.Sprintf("%d %s", n, label)))
-		}
+	if bad > 0 {
+		parts = append(parts, stRed.Render(fmt.Sprintf("✗ %d à risque", bad)))
 	}
-	add(push, "à pousser", stYellow)
-	add(pull, "à tirer", stYellow)
-	add(dirty, "modifié(s)", stYellow)
-	add(errs, "en erreur", stRed)
-	add(clean, plural(clean, "propre"), stGreen)
-	return strings.Join(parts, stDim.Render(" · "))
+	if todo > 0 {
+		parts = append(parts, stYellow.Render(fmt.Sprintf("● %d à traiter", todo)))
+	}
+	parts = append(parts, stGreen.Render(fmt.Sprintf("✓ %d en ordre", ok)))
+	return strings.Join(parts, "   ")
 }
 
-func remoteCell(r *Repo) string {
-	switch {
-	case r.Branch == "" || r.Error != "":
-		return stDim.Render("—")
-	case r.UpstreamGone:
-		return stYellow.Render("supprimé")
-	case r.Upstream == "":
-		return stDim.Render("—")
-	case r.Ahead > 0 || r.Behind > 0:
-		return stYellow.Render(counts(r.Ahead, r.Behind))
-	default:
-		return stGreen.Render("=")
+func toneStyle(t tone) lipgloss.Style {
+	switch t {
+	case toneOK:
+		return stGreen
+	case toneWarn:
+		return stYellow
+	case toneErr:
+		return stRed
+	case toneInfo:
+		return stDim
+	case toneAccent:
+		return stCyan
+	case toneTag:
+		return stMag
 	}
+	return lipgloss.NewStyle()
 }
 
-func mainCell(r *Repo) string {
-	if r.MainRef == "" || r.Error != "" || r.Branch == "" {
-		return stDim.Render("—")
+func renderSegs(segs []seg, sep string) string {
+	parts := make([]string, len(segs))
+	for i, s := range segs {
+		parts[i] = toneStyle(s.tone).Render(s.text)
 	}
-	txt := counts(r.AheadMain, r.BehindMain)
-	switch {
-	case txt == "=":
-		return stGreen.Render(txt)
-	case r.BehindMain > 0:
-		return stYellow.Render(txt)
-	default:
-		return txt
-	}
+	return strings.Join(parts, stDim.Render(sep))
 }
 
-func (m *model) stateCell(r *Repo) string {
+func statusIconTUI(l Level) string {
+	switch l {
+	case Error:
+		return stRed.Render("✗")
+	case Warn:
+		return stYellow.Render("●")
+	}
+	return stGreen.Render("✓")
+}
+
+// alertsCell : action en cours, résultat de la dernière action, puis les alertes.
+func (m *model) alertsCell(r *Repo, c rowCells) string {
 	if op, ok := m.busy[r.AbsPath]; ok {
 		label := map[string]string{"scan": "analyse", "fetch": "fetch", "pull": "pull", "push": "push"}[op]
 		return stCyan.Render(m.spin.View() + " " + label + "…")
@@ -836,18 +833,29 @@ func (m *model) stateCell(r *Repo) string {
 			parts = append(parts, stGreen.Render("✓ "+res.op))
 		}
 	}
-	for _, f := range r.Flags {
-		parts = append(parts, levelStyle(f.Level).Render(f.Label))
+	if len(c.alerts) > 0 {
+		parts = append(parts, renderSegs(c.alerts, " · "))
 	}
-	if len(r.Flags) == 0 {
-		parts = append(parts, stGreen.Render("✓ propre"))
+	return strings.Join(parts, stDim.Render(" · "))
+}
+
+// visibleRows : dépôts affichés, en arbre (sous-modules sous leur parent)
+// sauf en tri par gravité.
+func (m *model) visibleRows() []treeRow {
+	vis := m.visible()
+	if m.sortByState {
+		rows := make([]treeRow, len(vis))
+		for i, r := range vis {
+			rows[i] = treeRow{repo: r, name: r.Path}
+		}
+		return rows
 	}
-	return strings.Join(parts, stDim.Render(", "))
+	return buildTree(vis, filepath.Base(m.root))
 }
 
 func (m *model) viewList() string {
 	var b strings.Builder
-	vis := m.visible()
+	rows := m.visibleRows()
 	m.clampCursor()
 
 	// En-tête
@@ -859,45 +867,54 @@ func (m *model) viewList() string {
 	b.WriteString(fit(head, m.width) + "\n")
 
 	// Largeurs de colonnes
-	pw, bw := len("DÉPÔT"), len("BRANCHE")
-	for _, r := range vis {
-		pw = max(pw, lipgloss.Width(r.Path))
-		bw = max(bw, lipgloss.Width(r.Branch))
+	cells := make([]rowCells, len(rows))
+	w := []int{len("DÉPÔT"), len("BRANCHE"), len("SERVEUR"), len("MAIN"), len("LOCAL")}
+	for i, tr := range rows {
+		cells[i] = buildCells(tr.repo)
+		w[0] = max(w[0], lipgloss.Width(tr.prefix+tr.name))
+		w[1] = max(w[1], widthOf(cells[i].branch, ""))
+		w[2] = max(w[2], widthOf(cells[i].server, ""))
+		w[3] = max(w[3], widthOf(cells[i].main, " "))
+		w[4] = max(w[4], widthOf(cells[i].local, " · "))
 	}
-	pw, bw = min(pw, 40), min(bw, 26)
-	const rw, mw = 8, 9
-	fixed := 4 + pw + 2 + bw + 2 + rw + 2 + mw + 2
-	if rest := m.width - fixed; rest < 24 {
-		pw = max(10, pw-(24-rest))
-		fixed = 4 + pw + 2 + bw + 2 + rw + 2 + mw + 2
+	w[0], w[1], w[4] = min(w[0], 36), min(w[1], 24), min(w[4], 28)
+	const lead = 6 // curseur, sélection, icône
+	sep := stDim.Render(" │ ")
+	fixed := func() int { return lead + w[0] + w[1] + w[2] + w[3] + w[4] + 5*3 }
+	for _, k := range []struct{ col, floor int }{{0, 14}, {4, 14}, {1, 10}} {
+		if over := fixed() + 24 - m.width; over > 0 {
+			w[k.col] -= min(over, max(0, w[k.col]-k.floor))
+		}
 	}
-	sw := max(10, m.width-fixed)
+	aw := max(8, m.width-fixed())
 
-	hdr := "    " + fit("DÉPÔT", pw) + "  " + fit("BRANCHE", bw) + "  " + fit("REMOTE", rw) + "  " + fit("VS MAIN", mw) + "  " + "ÉTAT"
-	b.WriteString(stDim.Render(fit(hdr, m.width)) + "\n")
+	hdrCells := []string{fit("DÉPÔT", w[0]), fit("BRANCHE", w[1]), fit("SERVEUR", w[2]), fit("MAIN", w[3]), fit("LOCAL", w[4]), "À VOIR"}
+	for i := range hdrCells {
+		hdrCells[i] = stBold.Render(hdrCells[i])
+	}
+	b.WriteString(fit(strings.Repeat(" ", lead)+strings.Join(hdrCells, sep), m.width) + "\n")
 
 	h := m.rowsHeight()
-	for i := m.offset; i < min(len(vis), m.offset+h); i++ {
-		r := vis[i]
+	for i := m.offset; i < min(len(rows), m.offset+h); i++ {
+		tr, c := rows[i], cells[i]
+		r := tr.repo
 		cur, sel := "  ", stDim.Render("○ ")
-		path := r.Path
 		if m.selected[r.AbsPath] {
 			sel = stMag.Render("● ")
 		}
+		name := stBold.Render(tr.name)
 		if i == m.cursor {
 			cur = stCursor.Render("❯ ")
-			path = stCursor.Render(path)
-		} else {
-			path = stBold.Render(path)
+			name = stCursor.Render(tr.name)
 		}
-		branch := stCyan.Render(r.Branch)
-		if r.Detached {
-			branch = stYellow.Render(detachedLabel(r))
-		}
-		line := cur + sel + fit(path, pw) + "  " + fit(branch, bw) + "  " + fit(remoteCell(r), rw) + "  " +
-			fit(mainCell(r), mw) + "  " + fit(m.stateCell(r), sw)
+		path := stDim.Render(tr.prefix) + name
+		line := cur + sel + statusIconTUI(c.status) + " " + strings.Join([]string{
+			fit(path, w[0]), fit(renderSegs(c.branch, ""), w[1]), fit(renderSegs(c.server, ""), w[2]),
+			fit(renderSegs(c.main, " "), w[3]), fit(renderSegs(c.local, " · "), w[4]), fit(m.alertsCell(r, c), aw),
+		}, sep)
 		b.WriteString(line + "\n")
 	}
+	vis := rows
 	shown := min(len(vis), h)
 	if len(vis) == 0 && !m.scanning {
 		b.WriteString(stDim.Render("    Aucun dépôt ne correspond.") + "\n")
@@ -1022,7 +1039,7 @@ func (m *model) viewDetail() string {
 	r := m.repoByPath(m.detailPath)
 	title := stTitle.Render("‹ ")
 	if r != nil {
-		title += stBold.Render(r.Path) + "  " + stCyan.Render(r.Branch)
+		title += stBold.Render(r.Path) + "  " + renderSegs(buildCells(r).branch, "")
 		if op, ok := m.busy[r.AbsPath]; ok {
 			title += "  " + stCyan.Render(m.spin.View()+" "+op+"…")
 		}

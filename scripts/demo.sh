@@ -80,6 +80,33 @@ g -C "$D/code/work/lib" push -u origin feature/old
 g -C "$D/code/work/lib" push origin --delete feature/old
 g -C "$D/code/work/lib" fetch --prune
 
+# 8. Façon « serveur » : un dépôt parent avec des sous-modules
+S="$D/code/serveur/site"
+for m in mobile portail webform; do mkrepo "$m" "$D/tmp-sub-$m"; done
+mkrepo site "$S"
+for m in mobile portail webform; do
+  g -C "$S" -c protocol.file.allow=always submodule add "$D/remotes/$m.git" "$m"
+done
+g -C "$S" commit -m "ajout des sous-modules"; g -C "$S" push
+# Comme après un « git submodule update » : sous-modules en HEAD détachée
+g -C "$S" -c protocol.file.allow=always submodule update --init
+for m in mobile portail webform; do g -C "$S/$m" checkout --detach; done
+# site : un rebase interrompu par un conflit
+g -C "$S" checkout -b tmp; commit "$S" "conflit A"; g -C "$S" checkout main
+echo "conflit B" >> "$S/f.txt"; g -C "$S" add f.txt; g -C "$S" commit -m "conflit B"
+g -C "$S" checkout tmp; g -C "$S" rebase main || true
+# portail : décalé (quelqu'un a fait un checkout d'un autre commit)
+push_other portail 2; g -C "$S/portail" fetch; g -C "$S/portail" checkout origin/main
+# webform : commit fait en HEAD détachée, hors de toute branche
+commit "$S/webform" "correctif direct sur le serveur"
+# un autre projet du serveur : droits modifiés par un chmod (contenu identique)
+mkrepo docs "$D/code/serveur/docs"
+for i in 1 2 3; do echo "$i" > "$D/code/serveur/docs/p$i.md"; done
+g -C "$D/code/serveur/docs" add -A; g -C "$D/code/serveur/docs" commit -m pages; g -C "$D/code/serveur/docs" push
+chmod +x "$D"/code/serveur/docs/*.md
+echo "vraie modif" >> "$D/code/serveur/docs/p1.md"; chmod -x "$D/code/serveur/docs/p1.md"
+rm -rf "$D"/tmp-sub-*
+
 # Un node_modules qui contient un dépôt (doit être ignoré)
 mkdir -p "$D/code/work/web/node_modules/pkg" && g init "$D/code/work/web/node_modules/pkg"
 
