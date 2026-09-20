@@ -21,7 +21,7 @@ import (
 	xterm "github.com/charmbracelet/x/term"
 )
 
-const version = "0.10.0"
+const version = "0.11.0"
 
 func main() {
 	os.Exit(run())
@@ -41,6 +41,8 @@ func run() int {
 		exclude      = flag.String("exclude", "node_modules,vendor,.cache,.venv,venv,target", "dossiers ignorés, séparés par des virgules")
 		nested       = flag.Bool("nested", false, "chercher aussi des dépôts à l'intérieur d'autres dépôts")
 		noColor      = flag.Bool("no-color", false, "désactiver les couleurs")
+		color        = flag.String("color", "auto", "couleurs : auto, always (garder dans un pipe, ex. | less -R), never")
+		width        = flag.Int("width", 0, "largeur du tableau en colonnes (0 = celle du terminal)")
 		check        = flag.Bool("check", false, "code de sortie 1 si un dépôt demande une action")
 		showVersion  = flag.Bool("version", false, "afficher la version")
 		interactive  = flag.Bool("i", false, "mode interactif (TUI) : naviguer, sélectionner, fetch/pull/push en lot")
@@ -49,7 +51,7 @@ func run() int {
 		fmt.Fprintf(os.Stderr, "Usage : gitscan [options] [dossier]\n        gitscan help    comment lire le tableau\n\n")
 		fmt.Fprintf(os.Stderr, "Scanne récursivement un dossier et affiche l'état de chaque dépôt git.\n\nOptions :\n")
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nExemples :\n  gitscan ~/code\n  gitscan -i ~/code           # interface interactive\n  gitscan -f -a ~/code        # fetch puis n'afficher que ce qui demande une action\n  gitscan -b -c .             # détail des branches et de la config\n  gitscan -json ~/code | jq '.[] | select(.ahead > 0) | .path'\n")
+		fmt.Fprintf(os.Stderr, "\nExemples :\n  gitscan ~/code\n  gitscan -i ~/code           # interface interactive\n  gitscan -f -a ~/code        # fetch puis n'afficher que ce qui demande une action\n  gitscan -b -c .             # détail des branches et de la config\n  gitscan -width 120 -color=always ~/code | less -R   # tableau large, page par page\n  gitscan -json ~/code | jq '.[] | select(.ahead > 0) | .path'\n")
 	}
 	if len(os.Args) > 1 && (os.Args[1] == "help" || os.Args[1] == "aide") {
 		printLegend(os.Stdout, newPalette(isTerminal(os.Stdout) && os.Getenv("NO_COLOR") == ""))
@@ -112,6 +114,12 @@ func run() int {
 	defer stop()
 
 	colors := !*noColor && os.Getenv("NO_COLOR") == "" && isTerminal(os.Stdout) && !*jsonOut
+	switch *color {
+	case "always":
+		colors = !*jsonOut
+	case "never":
+		colors = false
+	}
 	p := newPalette(colors)
 	progress := isTerminal(os.Stderr) && !*jsonOut
 
@@ -183,7 +191,7 @@ func run() int {
 		if len(shown) == 0 {
 			fmt.Printf("%s✓ Tous les dépôts sont propres et à jour.%s\n", p.green, p.reset)
 		} else {
-			renderTable(os.Stdout, shown, filepath.Base(root), p, *branches, *config, termWidth())
+			renderTable(os.Stdout, shown, filepath.Base(root), p, *branches, *config, termWidth(*width))
 		}
 		renderSummary(os.Stdout, repos, p, time.Since(start))
 		if !*fetch {
@@ -215,8 +223,11 @@ func isTerminal(f *os.File) bool {
 	return err == nil && st.Mode()&os.ModeCharDevice != 0
 }
 
-// termWidth : largeur du terminal, 0 si la sortie est redirigée.
-func termWidth() int {
+// termWidth : largeur demandée, sinon celle du terminal, 0 si la sortie est redirigée.
+func termWidth(forced int) int {
+	if forced > 0 {
+		return forced
+	}
 	if !isTerminal(os.Stdout) {
 		return 0
 	}

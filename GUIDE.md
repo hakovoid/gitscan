@@ -181,6 +181,19 @@ gitscan help
 
 Explique l'icône en début de ligne, chaque colonne, les flèches et chaque message.
 
+### Si le tableau est trop large
+
+gitscan s'adapte à la largeur du terminal : il raccourcit les chemins, renvoie les textes à la ligne, et sous ~110 colonnes il place « À VOIR » sur une ligne `↳` sous le dépôt. S'il reste trop large :
+
+```sh
+gitscan -a ~/code                      # n'affiche que ce qui demande une action
+gitscan -width 100 ~/code              # force une largeur plus petite
+gitscan -width 200 -color=always ~/code | less -RS   # page par page, défilement gauche/droite
+gitscan -i ~/code                      # mode interactif : tout tient à l'écran
+```
+
+Dans `less` : `←` `→` pour défiler, `q` pour quitter.
+
 ### Les options utiles
 
 | Commande | Ce qu'elle fait |

@@ -113,6 +113,8 @@ gitscan help                # comment lire le tableau (colonnes, flèches, messa
 | `-nested` | cherche aussi des dépôts dans d'autres dépôts |
 | `-check` | code de sortie 1 si un dépôt demande une action |
 | `-no-color` | désactive les couleurs (aussi via `NO_COLOR`) |
+| `-color auto\|always\|never` | `always` garde les couleurs dans un tuyau : `gitscan ~/code -color=always \| less -R` |
+| `-width N` | force la largeur du tableau (utile en pipe, où gitscan ne connaît pas la largeur) |
 
 ### Exemples avec jq
 
