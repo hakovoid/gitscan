@@ -21,7 +21,7 @@ import (
 	xterm "github.com/charmbracelet/x/term"
 )
 
-const version = "0.14.0"
+const version = "0.14.1"
 
 func main() {
 	os.Exit(run())

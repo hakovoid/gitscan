@@ -1110,7 +1110,7 @@ func (m *model) viewDetail() string {
 	}
 	footer := helpLine([][2]string{
 		{"esc", "retour"}, {"f", "fetch"}, {"p", "pull"}, {"P", "push"}, {"r", "rafraîchir"},
-		{"b", "branche des commits"}, {"s", "shell"}, {"l", "lazygit"}, {"↑↓", "défiler"},
+		{"b", "branches"}, {"s", "shell"}, {"l", "lazygit"}, {"↑↓", "défiler"},
 	})
 	if pct := m.vp.ScrollPercent(); m.vp.TotalLineCount() > m.vp.Height {
 		footer += stDim.Render(fmt.Sprintf("   %d%%", int(pct*100)))
