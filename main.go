@@ -193,9 +193,9 @@ func run() int {
 		} else {
 			renderTable(os.Stdout, shown, filepath.Base(root), p, *branches, *config, termWidth(*width))
 		}
-		renderSummary(os.Stdout, repos, p, time.Since(start))
+		renderSummary(os.Stdout, repos, p, time.Since(start), termWidth(*width))
 		if !*fetch {
-			fmt.Printf("%sAstuce : -f pour faire un fetch d'abord (sinon vs SERVEUR peut être périmé).%s\n", p.dim, p.reset)
+			printDim(os.Stdout, p, termWidth(*width), "Astuce : -f pour faire un fetch d'abord (sinon vs SERVEUR peut être périmé).")
 		}
 		var more []string
 		if !*branches {
@@ -205,7 +205,7 @@ func run() int {
 			more = append(more, "-c config")
 		}
 		more = append(more, "gitscan help (légende)")
-		fmt.Printf("%sDétails : %s%s\n", p.dim, strings.Join(more, " · "), p.reset)
+		printDim(os.Stdout, p, termWidth(*width), "Détails : "+strings.Join(more, " · "))
 	}
 
 	if *check {

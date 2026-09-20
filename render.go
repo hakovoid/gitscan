@@ -341,7 +341,7 @@ func renderConfig(w io.Writer, r *Repo, p palette, indent string) {
 	}
 }
 
-func renderSummary(w io.Writer, repos []*Repo, p palette, elapsed time.Duration) {
+func renderSummary(w io.Writer, repos []*Repo, p palette, elapsed time.Duration, width int) {
 	var bad, todo, ok int
 	for _, r := range repos {
 		switch buildCells(r).status {
@@ -389,8 +389,19 @@ func renderSummary(w io.Writer, repos []*Repo, p palette, elapsed time.Duration)
 	if len(line2) > 0 {
 		fmt.Fprintf(w, "   %s\n", strings.Join(line2, p.dim+" · "+p.reset))
 	}
-	fmt.Fprintf(w, "   %s↑ à pousser · ↓ à tirer · = identique · @ commit (pas de branche)%s\n", p.dim, p.reset)
-	fmt.Fprintf(w, "   %svs SERVEUR : ta branche comparée à sa copie sur le serveur · vs MAIN : comparée à origin/main (à défaut, la main locale)%s\n", p.dim, p.reset)
+	printDim(w, p, width, "↑ à pousser · ↓ à tirer · = identique · @ commit (pas de branche)")
+	printDim(w, p, width, "vs SERVEUR : ta branche comparée à sa copie sur le serveur · vs MAIN : comparée à origin/main (à défaut, la main locale)")
+}
+
+// printDim écrit une ligne d'aide en gris, repliée si le terminal est étroit.
+func printDim(w io.Writer, p palette, width int, s string) {
+	lines := []string{s}
+	if width > 0 && len([]rune(s))+3 > width {
+		lines = strings.Split(wrapText(s, max(20, width-3)), "\n")
+	}
+	for _, l := range lines {
+		fmt.Fprintf(w, "   %s%s%s\n", p.dim, l, p.reset)
+	}
 }
 
 func plural(n int, word string) string {
