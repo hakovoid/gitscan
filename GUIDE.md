@@ -263,6 +263,7 @@ Tape `gitscan help` pour avoir cette explication dans le terminal.
 | `non poussée(s) : dev, fix` | ces branches ont des commits qui ne sont pas sur le serveur | les pousser, ou les supprimer si inutiles |
 | `tag sprint-33 (+3 autres)` | ce commit porte ce tag, et 3 autres tags pointent dessus | rien, si c'est la version voulue |
 | `2 commits après sprint-33` | aucun tag sur ce commit : il est 2 commits après le dernier tag | rien |
+| `= (sans upstream)` (vs SERVEUR) | la branche est bien sur le serveur, mais ta copie locale n'y est pas reliée | `git branch -u origin/<branche>` |
 | `suit origin/nbl, pas init-prd` | ta branche est reliée à une branche distante qui porte un autre nom : les ↑↓ comparent avec celle-là | `git branch -u origin/<la bonne branche>` |
 
 Couleurs : **rouge** = risque · **jaune** = à faire · **gris** = info · **vert** = bon · **cyan** = branche · **magenta** = commit ou tag.

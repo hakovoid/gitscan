@@ -103,6 +103,19 @@ func buildCells(r *Repo) rowCells {
 		c.server = []seg{{"supprimée", toneWarn}}
 	case r.Upstream == "" && r.NoRemote:
 		c.server = []seg{{"aucun", toneInfo}}
+	case r.Upstream == "" && r.MatchRemote != "":
+		// Pas d'upstream, mais une branche distante du même nom : on compare avec elle.
+		switch {
+		case r.MatchAhead > 0 && r.MatchBehind > 0:
+			c.server = []seg{{fmt.Sprintf("↑%d ↓%d", r.MatchAhead, r.MatchBehind), toneErr}}
+		case r.MatchAhead > 0:
+			c.server = []seg{{fmt.Sprintf("↑%d", r.MatchAhead), toneWarn}}
+		case r.MatchBehind > 0:
+			c.server = []seg{{fmt.Sprintf("↓%d", r.MatchBehind), toneWarn}}
+		default:
+			c.server = []seg{{"=", toneOK}}
+		}
+		c.server = append(c.server, seg{" (sans upstream)", toneInfo})
 	case r.Upstream == "":
 		c.server = []seg{{"jamais poussée", toneWarn}}
 	case r.Ahead > 0 && r.Behind > 0:

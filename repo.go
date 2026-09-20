@@ -39,7 +39,10 @@ type Repo struct {
 	Conflicts int `json:"conflicts"`
 	Stashes   int `json:"stashes"`
 
-	NoRemote          bool   `json:"no_remote,omitempty"`          // aucun remote configuré
+	NoRemote          bool   `json:"no_remote,omitempty"`    // aucun remote configuré
+	MatchRemote       string `json:"match_remote,omitempty"` // sans upstream : branche distante de même nom trouvée
+	MatchAhead        int    `json:"match_ahead,omitempty"`  // commits absents de cette branche distante
+	MatchBehind       int    `json:"match_behind,omitempty"`
 	SubmodulesChanged int    `json:"submodules_changed,omitempty"` // sous-modules dont le commit a bougé
 	Operation         string `json:"operation,omitempty"`          // rebase, merge, cherry-pick… en cours
 	OrphanCommits     int    `json:"orphan_commits,omitempty"`     // commits sur HEAD détachée hors de toute branche
@@ -53,6 +56,8 @@ type Repo struct {
 	Branches []Branch `json:"branches,omitempty"`
 	// Branches locales (hors courante) avec du travail non poussé.
 	UnpushedBranches []string `json:"unpushed_branches,omitempty"`
+	// Branches déjà sur le serveur, mais sans upstream configuré localement.
+	UnlinkedBranches []string `json:"unlinked_branches,omitempty"`
 
 	Config *Config `json:"config,omitempty"`
 
@@ -74,6 +79,7 @@ type Branch struct {
 	AheadMain    int       `json:"ahead_main"`
 	BehindMain   int       `json:"behind_main"`
 	MergedInMain bool      `json:"merged_in_main"`
+	MatchRemote  string    `json:"match_remote,omitempty"` // sans upstream : branche distante de même nom
 	LastCommit   time.Time `json:"last_commit"`
 }
 
@@ -130,9 +136,18 @@ func inspect(ctx context.Context, root, path string, opt InspectOptions) *Repo {
 	r.readStash(ctx, path)
 	r.readGitDir(ctx, path)
 	r.readSubmodule(ctx, path)
+	remotes := remoteRefs(ctx, path)
 	if r.Upstream == "" && !r.Detached {
-		if out, err := runGit(ctx, path, "remote"); err == nil && strings.TrimSpace(out) == "" {
-			r.NoRemote = true
+		if len(remotes) == 0 {
+			if out, err := runGit(ctx, path, "remote"); err == nil && strings.TrimSpace(out) == "" {
+				r.NoRemote = true
+			}
+		}
+		// Pas d'upstream configuré, mais une branche distante du même nom existe
+		// peut-être : le travail est alors déjà sauvegardé, seul le lien manque.
+		if m := matchRemote(remotes, r.Branch); m != "" {
+			r.MatchRemote = m
+			r.MatchBehind, r.MatchAhead = leftRight(ctx, path, m, "HEAD")
 		}
 	}
 	r.MainRef = detectMain(ctx, path, opt.MainOverride)
@@ -165,7 +180,7 @@ func inspect(ctx context.Context, root, path string, opt InspectOptions) *Repo {
 	if r.MainRef != "" {
 		r.BehindMain, r.AheadMain = leftRight(ctx, path, r.MainRef, "HEAD")
 	}
-	r.readBranches(ctx, path, opt.AllBranches)
+	r.readBranches(ctx, path, remotes, opt.AllBranches)
 	if opt.WithConfig {
 		r.Config = readConfig(ctx, path)
 	}
@@ -366,7 +381,36 @@ func leftRight(ctx context.Context, dir, a, b string) (int, int) {
 
 // readBranches liste les branches locales. La comparaison de chaque branche
 // avec main (un appel git par branche) n'est faite que si all est vrai.
-func (r *Repo) readBranches(ctx context.Context, dir string, all bool) {
+// remoteRefs renvoie les branches distantes connues (origin/main, upstream/dev…).
+func remoteRefs(ctx context.Context, dir string) map[string]bool {
+	out, err := runGit(ctx, dir, "for-each-ref", "--format=%(refname:short)", "refs/remotes")
+	if err != nil {
+		return nil
+	}
+	set := map[string]bool{}
+	for _, l := range strings.Fields(out) {
+		set[l] = true
+	}
+	return set
+}
+
+// matchRemote cherche une branche distante portant le même nom, origin d'abord.
+func matchRemote(remotes map[string]bool, branch string) string {
+	if branch == "" {
+		return ""
+	}
+	if remotes["origin/"+branch] {
+		return "origin/" + branch
+	}
+	for ref := range remotes {
+		if _, short, ok := strings.Cut(ref, "/"); ok && short == branch {
+			return ref
+		}
+	}
+	return ""
+}
+
+func (r *Repo) readBranches(ctx context.Context, dir string, remotes map[string]bool, all bool) {
 	const sep = "\x1f"
 	format := strings.Join([]string{
 		"%(refname:short)", "%(upstream:short)", "%(upstream:track)",
@@ -400,18 +444,28 @@ func (r *Repo) readBranches(ctx context.Context, dir string, all bool) {
 			b.LastCommit = time.Unix(ts, 0)
 		}
 
-		// Travail non poussé sur une autre branche que la courante.
-		if !b.Current && b.Name != mainLocal && (b.Upstream == "" || b.UpstreamGone || b.Ahead > 0) {
-			if b.Upstream == "" || b.UpstreamGone {
-				// Sans upstream : ne compte que si la branche a des commits hors de main.
-				if r.MainRef == "" {
+		// Travail non poussé sur une autre branche que la courante : une branche
+		// sans upstream peut très bien être déjà sur le serveur sous le même nom.
+		if !b.Current && b.Name != mainLocal {
+			switch {
+			case b.Upstream != "" && !b.UpstreamGone:
+				if b.Ahead > 0 {
+					r.UnpushedBranches = append(r.UnpushedBranches, b.Name)
+				}
+			default:
+				if m := matchRemote(remotes, b.Name); m != "" {
+					b.MatchRemote = m
+					if _, ahead := leftRight(ctx, dir, m, b.Name); ahead > 0 {
+						r.UnpushedBranches = append(r.UnpushedBranches, b.Name)
+					} else {
+						r.UnlinkedBranches = append(r.UnlinkedBranches, b.Name)
+					}
+				} else if r.MainRef == "" {
 					r.UnpushedBranches = append(r.UnpushedBranches, b.Name)
 				} else if _, ahead := leftRight(ctx, dir, r.MainRef, b.Name); ahead > 0 {
 					b.AheadMain = ahead
 					r.UnpushedBranches = append(r.UnpushedBranches, b.Name)
 				}
-			} else {
-				r.UnpushedBranches = append(r.UnpushedBranches, b.Name)
 			}
 		}
 

@@ -91,6 +91,10 @@ func (r *Repo) computeFlags() {
 		r.add("upstream_gone", Warn, "upstream supprimé")
 	case r.Upstream == "" && r.NoRemote:
 		r.add("no_remote", Info, "aucun remote")
+	case r.Upstream == "" && r.MatchRemote != "" && r.MatchAhead > 0:
+		r.add("no_upstream", Warn, "pas d'upstream : ↑%d vs %s", r.MatchAhead, r.MatchRemote)
+	case r.Upstream == "" && r.MatchRemote != "":
+		r.add("unlinked", Info, "déjà sur %s : git branch -u %s pour la relier", r.MatchRemote, r.MatchRemote)
 	case r.Upstream == "":
 		r.add("no_upstream", Warn, "jamais poussée")
 	case r.Ahead > 0 && r.Behind > 0:
@@ -105,6 +109,9 @@ func (r *Repo) computeFlags() {
 		if _, short, ok := strings.Cut(r.Upstream, "/"); ok && short != r.Branch {
 			r.add("upstream_other", Warn, "suit %s, pas %s", r.Upstream, r.Branch)
 		}
+	}
+	if n := len(r.UnlinkedBranches); n > 0 {
+		r.add("unlinked_branches", Info, "%d branche(s) sans upstream, déjà sur le serveur", n)
 	}
 	if n := len(r.UnpushedBranches); n > 0 {
 		// Jusqu'à 3 noms directement dans le tableau, sinon renvoi vers -b.
