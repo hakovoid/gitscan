@@ -72,6 +72,7 @@ func printLegend(w io.Writer, p palette) {
 	row("sous-module ✓", "sous-module sur le commit attendu par son parent")
 	row("non poussée(s) : a, b", "autres branches locales avec des commits absents du serveur")
 	row("n branches non poussées", "idem, plus de 3 (liste complète : gitscan -b)")
+	row("main locale ↓12 vs origin/main", "(info) ta branche main locale est en retard sur celle du serveur")
 	row("déjà sur origin/x", "(info) branche présente sur le serveur, lien manquant : git branch -u origin/x")
 	row("n branches sans upstream", "(info) idem pour d'autres branches locales")
 	row("tag sprint-33", "(info) tag de ce commit ; « +3 autres » = 3 autres tags dessus")

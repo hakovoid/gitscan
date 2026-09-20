@@ -121,6 +121,9 @@ func (r *Repo) computeFlags() {
 			r.add("unpushed_branches", Warn, "%d branches non poussées (%s, …)", n, strings.Join(r.UnpushedBranches[:2], ", "))
 		}
 	}
+	if r.LocalMainBehind > 0 {
+		r.add("local_main_behind", Info, "%s locale ↓%d vs %s", r.LocalMainName, r.LocalMainBehind, r.MainRef)
+	}
 	// Comparaison faite avec une main purement locale : elle peut elle-même être périmée.
 	if r.MainRef != "" && !strings.Contains(r.MainRef, "/") && !r.NoRemote {
 		r.add("main_local", Info, "vs MAIN = %s (locale)", r.MainRef)

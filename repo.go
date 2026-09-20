@@ -27,9 +27,11 @@ type Repo struct {
 	Ahead        int      `json:"ahead"`  // commits à pousser
 	Behind       int      `json:"behind"` // commits à tirer
 
-	MainRef    string `json:"main_ref,omitempty"` // ex. origin/main
-	AheadMain  int    `json:"ahead_main"`         // commits de la branche absents de main
-	BehindMain int    `json:"behind_main"`        // commits de main absents de la branche
+	MainRef         string `json:"main_ref,omitempty"`          // ex. origin/main
+	LocalMainName   string `json:"local_main,omitempty"`        // la main locale correspondante
+	LocalMainBehind int    `json:"local_main_behind,omitempty"` // son retard sur la main distante
+	AheadMain       int    `json:"ahead_main"`                  // commits de la branche absents de main
+	BehindMain      int    `json:"behind_main"`                 // commits de main absents de la branche
 
 	Changed   int `json:"changed"`   // fichiers suivis modifiés (indexés ou non), comptés une fois
 	ModeOnly  int `json:"mode_only"` // parmi eux : seuls les droits (chmod) ont changé
@@ -442,6 +444,13 @@ func (r *Repo) readBranches(ctx context.Context, dir string, remotes map[string]
 		}
 		if ts, err := strconv.ParseInt(f[3], 10, 64); err == nil {
 			b.LastCommit = time.Unix(ts, 0)
+		}
+
+		// La main locale est-elle en retard sur celle du serveur ? On démarre
+		// souvent une branche depuis elle sans s'en rendre compte.
+		if b.Name == mainLocal && r.MainRef != mainLocal {
+			r.LocalMainName = b.Name
+			r.LocalMainBehind, _ = leftRight(ctx, dir, r.MainRef, b.Name)
 		}
 
 		// Travail non poussé sur une autre branche que la courante : une branche
