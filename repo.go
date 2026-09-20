@@ -15,9 +15,11 @@ type Repo struct {
 	Path    string `json:"path"`     // chemin relatif au dossier scanné
 	AbsPath string `json:"abs_path"` // chemin absolu
 
-	Branch       string `json:"branch"`             // branche courante
-	Detached     bool   `json:"detached,omitempty"` // HEAD détachée
-	Upstream     string `json:"upstream,omitempty"` // ex. origin/feature
+	Branch       string `json:"branch"`                // branche courante
+	Detached     bool   `json:"detached,omitempty"`    // HEAD détachée
+	HeadDesc     string `json:"head_desc,omitempty"`   // si détachée : tag ou commit (git describe)
+	HeadOnTag    bool   `json:"head_on_tag,omitempty"` // si détachée : exactement sur un tag
+	Upstream     string `json:"upstream,omitempty"`    // ex. origin/feature
 	UpstreamGone bool   `json:"upstream_gone,omitempty"`
 	Ahead        int    `json:"ahead"`  // commits à pousser
 	Behind       int    `json:"behind"` // commits à tirer
@@ -111,7 +113,15 @@ func inspect(ctx context.Context, root, path string, opt InspectOptions) *Repo {
 	r.readStash(ctx, path)
 	r.readLastFetch(ctx, path)
 	r.MainRef = detectMain(ctx, path, opt.MainOverride)
-	if r.MainRef != "" && !r.Detached {
+	if r.Detached {
+		if out, err := runGit(ctx, path, "describe", "--tags", "--always"); err == nil {
+			r.HeadDesc = strings.TrimSpace(out)
+		}
+		if _, err := runGit(ctx, path, "describe", "--tags", "--exact-match"); err == nil {
+			r.HeadOnTag = true
+		}
+	}
+	if r.MainRef != "" {
 		r.BehindMain, r.AheadMain = leftRight(ctx, path, r.MainRef, "HEAD")
 	}
 	r.readBranches(ctx, path, opt.AllBranches)

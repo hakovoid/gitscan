@@ -55,7 +55,7 @@ func renderTable(w io.Writer, repos []*Repo, p palette, showBranches, showConfig
 	for _, r := range repos {
 		branch := c(p, p.cyan, r.Branch)
 		if r.Detached {
-			branch = c(p, p.yellow, "(détachée)")
+			branch = c(p, p.yellow, detachedLabel(r))
 		}
 
 		remote := c(p, p.dim, "—")
@@ -72,7 +72,7 @@ func renderTable(w io.Writer, repos []*Repo, p palette, showBranches, showConfig
 		}
 
 		vsMain := c(p, p.dim, "—")
-		if r.MainRef != "" && !r.Detached && r.Error == "" {
+		if r.MainRef != "" && r.Error == "" {
 			if isMainBranch(r.Branch, r.MainRef) && r.AheadMain == 0 && r.BehindMain == 0 {
 				vsMain = c(p, p.green, "=")
 			} else {
@@ -155,6 +155,8 @@ func renderBranches(w io.Writer, r *Repo, p palette, indent string) {
 		switch {
 		case b.UpstreamGone:
 			up = p.yellow + "upstream supprimé" + p.reset
+		case b.Upstream == "" && b.AheadMain > 0 && !isMainBranch(b.Name, r.MainRef):
+			up = p.yellow + "jamais poussée" + p.reset
 		case b.Upstream == "":
 			up = p.dim + "pas d'upstream" + p.reset
 		default:

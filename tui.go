@@ -809,7 +809,7 @@ func remoteCell(r *Repo) string {
 }
 
 func mainCell(r *Repo) string {
-	if r.MainRef == "" || r.Detached || r.Error != "" || r.Branch == "" {
+	if r.MainRef == "" || r.Error != "" || r.Branch == "" {
 		return stDim.Render("—")
 	}
 	txt := counts(r.AheadMain, r.BehindMain)
@@ -892,7 +892,7 @@ func (m *model) viewList() string {
 		}
 		branch := stCyan.Render(r.Branch)
 		if r.Detached {
-			branch = stYellow.Render("(détachée)")
+			branch = stYellow.Render(detachedLabel(r))
 		}
 		line := cur + sel + fit(path, pw) + "  " + fit(branch, bw) + "  " + fit(remoteCell(r), rw) + "  " +
 			fit(mainCell(r), mw) + "  " + fit(m.stateCell(r), sw)

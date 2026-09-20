@@ -215,6 +215,8 @@ Si aucun dépôt n'est coché, l'action s'applique au dépôt sous le curseur.
 | `jamais poussée` | la branche n'existe pas encore sur le serveur | `P` |
 | `upstream supprimé` | la branche a été supprimée du serveur (souvent après une PR fusionnée) | supprimer la branche locale |
 | `retard main ↓4` | `main` a avancé depuis ta branche | mettre ta branche à jour si besoin |
+| `non poussée(s) : dev, fix` | ces branches ont des commits qui ne sont pas sur le serveur | les pousser, ou les supprimer si elles sont inutiles |
+| `@v1.4.2` (colonne BRANCHE) | tu n'es sur aucune branche, mais sur le tag v1.4.2 (courant sur un serveur) | rien, si c'est voulu |
 | `stash 1` | du travail mis de côté avec `git stash` | le récupérer ou le supprimer |
 
 Couleurs : **rouge** = problème · **jaune** = action à faire · **gris** = pour info.

@@ -51,6 +51,9 @@ func (r *Repo) computeFlags() {
 		r.add("untracked", Warn, "non suivi %d", r.Untracked)
 	}
 	switch {
+	case r.Detached && r.HeadOnTag:
+		// Courant pour un déploiement : on est sur une version taguée.
+		r.add("detached", Info, "sur le tag %s", r.HeadDesc)
 	case r.Detached:
 		r.add("detached", Warn, "HEAD détachée")
 	case r.UpstreamGone:
@@ -65,7 +68,12 @@ func (r *Repo) computeFlags() {
 		r.add("behind", Warn, "à tirer ↓%d", r.Behind)
 	}
 	if n := len(r.UnpushedBranches); n > 0 {
-		r.add("unpushed_branches", Warn, "%d branche(s) non poussée(s)", n)
+		// Jusqu'à 3 noms directement dans le tableau, sinon renvoi vers -b.
+		if n <= 3 {
+			r.add("unpushed_branches", Warn, "non poussée(s) : %s", strings.Join(r.UnpushedBranches, ", "))
+		} else {
+			r.add("unpushed_branches", Warn, "%d branches non poussées (%s, …)", n, strings.Join(r.UnpushedBranches[:2], ", "))
+		}
 	}
 	// En retard sur main : seulement pertinent quand on n'est pas sur main.
 	if r.BehindMain > 0 && r.MainRef != "" && !isMainBranch(r.Branch, r.MainRef) {
@@ -115,4 +123,12 @@ func humanAge(d time.Duration) string {
 	default:
 		return fmt.Sprintf("%d ans", int(d.Hours()/24/365))
 	}
+}
+
+// detachedLabel : pour une HEAD détachée, le tag ou le commit, ex. « @v1.2.3 » ou « @a1b2c3d ».
+func detachedLabel(r *Repo) string {
+	if r.HeadDesc == "" {
+		return "(détachée)"
+	}
+	return "@" + r.HeadDesc
 }

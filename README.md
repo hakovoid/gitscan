@@ -123,8 +123,9 @@ gitscan -json ~/code | jq -r '.[] | select(.config.user_email == null) | .path'
 | `conflits n` | erreur | merge ou rebase en cours |
 | `jamais poussée` | action | la branche courante n'a pas d'upstream |
 | `upstream supprimé` | action | la branche distante a disparu (souvent : PR fusionnée) |
-| `n branche(s) non poussée(s)` | action | d'autres branches locales ont des commits absents du remote |
-| `HEAD détachée` | action | pas sur une branche |
+| `non poussée(s) : x, y` | action | d'autres branches locales ont des commits absents du remote (au-delà de 3 : `n branches non poussées`, détail avec `-b`) |
+| `HEAD détachée` | action | pas sur une branche ; la colonne BRANCHE affiche le commit (`@a1b2c3d`) |
+| `sur le tag v1.4.2` | info | HEAD détachée sur un tag : normal pour un déploiement |
 | `retard main ↓n` | info | main a avancé depuis la création de la branche |
 | `stash n` | info | des stash traînent |
 | `fetch il y a …` | info | dernier fetch de plus de 7 jours |

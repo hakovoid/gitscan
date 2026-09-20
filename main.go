@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-const version = "0.4.0"
+const version = "0.5.0"
 
 func main() {
 	os.Exit(run())
@@ -187,7 +187,15 @@ func run() int {
 		if !*fetch {
 			fmt.Printf("%sAstuce : -f pour faire un fetch d'abord (sinon l'état distant peut être périmé).%s\n", p.dim, p.reset)
 		}
-		fmt.Printf("%sComment lire ce tableau : gitscan help%s\n", p.dim, p.reset)
+		var more []string
+		if !*branches {
+			more = append(more, "-b toutes les branches")
+		}
+		if !*config {
+			more = append(more, "-c config")
+		}
+		more = append(more, "gitscan help pour lire le tableau")
+		fmt.Printf("%sPlus de détails : %s%s\n", p.dim, strings.Join(more, " · "), p.reset)
 	}
 
 	if *check {
