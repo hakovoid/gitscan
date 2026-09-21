@@ -17,6 +17,7 @@ type Repo struct {
 	AbsPath string `json:"abs_path"` // chemin absolu
 
 	Branch       string   `json:"branch"`                   // branche courante
+	Head         string   `json:"head,omitempty"`           // commit courant (court), toujours renseigné
 	Detached     bool     `json:"detached,omitempty"`       // HEAD détachée
 	HeadSHA      string   `json:"head_sha,omitempty"`       // si détachée : commit court
 	HeadTags     []string `json:"head_tags,omitempty"`      // tags pointant exactement sur HEAD (plus récent d'abord)
@@ -206,6 +207,10 @@ func (r *Repo) readStatus(ctx context.Context, dir string) error {
 			r.Branch = strings.TrimPrefix(line, "# branch.head ")
 			if r.Branch == "(detached)" {
 				r.Detached = true
+			}
+		case strings.HasPrefix(line, "# branch.oid "):
+			if oid := strings.TrimPrefix(line, "# branch.oid "); oid != "(initial)" {
+				r.Head = oid[:min(7, len(oid))]
 			}
 		case strings.HasPrefix(line, "# branch.upstream "):
 			r.Upstream = strings.TrimPrefix(line, "# branch.upstream ")
