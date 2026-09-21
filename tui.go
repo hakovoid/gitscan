@@ -96,6 +96,7 @@ const (
 	modeConfirm
 	modeBranches
 	modeInfo
+	modeChanges
 )
 
 type opResult struct {
@@ -145,6 +146,11 @@ type model struct {
 
 	confirm *confirmation // question oui/non en cours (push, ménage, sous-modules)
 
+	snapFile   string    // instantané du scan précédent (~/.cache/gitscan)
+	prevSnap   *snapshot // nil au premier scan de ce dossier
+	changes    []change  // différences avec lui, calculées après le premier scan
+	snapLoaded bool
+
 	detailPath   string
 	branchCursor int    // vue branches
 	wantBranches bool   // ouvrir la vue branches dès que le détail est chargé
@@ -178,6 +184,7 @@ func runTUI(root string, depth int, excludes map[string]bool, nested bool, opt I
 		vp:           viewport.New(80, 20),
 		infoVP:       viewport.New(80, 20),
 		helpVP:       viewport.New(80, 20),
+		snapFile:     snapshotFile(root, nested, depth, excludes),
 	}
 	if n := opt.Normal; n != nil && len(n.warnings) > 0 {
 		m.setMsg(true, "%s dans %s : %s", plur(len(n.warnings), "règle ignorée", "règles ignorées"), normalFileName, n.warnings[0])
@@ -366,6 +373,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
+			m.saveSnapshot()
 			m.cancel()
 			return m, tea.Quit
 		}
@@ -377,6 +385,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.keyConfirm(msg)
 		case modeInfo:
 			return m, m.keyInfo(msg)
+		case modeChanges:
+			return m, m.keyChanges(msg)
 		case modeBranches:
 			return m, m.keyBranches(msg)
 		case modeDetail:
@@ -440,6 +450,7 @@ func (m *model) onOpDone(msg opDoneMsg) tea.Cmd {
 		if m.scanDone >= m.scanTotal {
 			m.scanning = false
 			m.welcomed = true
+			m.compareWithPrevious()
 		}
 	}
 	var cmds []tea.Cmd
@@ -473,8 +484,11 @@ func (m *model) keyList(msg tea.KeyMsg) tea.Cmd {
 	vis := m.visible()
 	switch msg.String() {
 	case "q":
+		m.saveSnapshot()
 		m.cancel()
 		return tea.Quit
+	case "c":
+		m.openChanges()
 	case "up", "k":
 		m.cursor--
 	case "down", "j":
@@ -791,6 +805,8 @@ func (m *model) View() string {
 		return m.viewBranches()
 	case modeInfo:
 		return m.viewInfo()
+	case modeChanges:
+		return m.viewChanges()
 	}
 	if !m.welcomed {
 		return m.viewWelcome()
@@ -1043,7 +1059,7 @@ func (m *model) viewList() string {
 	b.WriteString(fit(strings.Join(status, "  "), m.width) + "\n")
 	b.WriteString(fit(helpLine([][2]string{
 		{"espace", "sélect."}, {"a", "tout"}, {"f", "fetch"}, {"p", "pull"}, {"P", "push"},
-		{"⏎", "détail"}, {"b", "branches"}, {"i", "expliquer"}, {"t", "à traiter"}, {"/", "chercher"}, {"?", "aide"}, {"q", "quitter"},
+		{"⏎", "détail"}, {"b", "branches"}, {"i", "expliquer"}, {"c", "changements"}, {"t", "à traiter"}, {"/", "chercher"}, {"?", "aide"}, {"q", "quitter"},
 	}), m.width))
 	return b.String()
 }

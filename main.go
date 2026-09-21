@@ -48,6 +48,8 @@ func run() int {
 		interactive  = flag.Bool("i", false, "mode interactif (TUI) : naviguer, sélectionner, fetch/pull/push en lot")
 		normalFile   = flag.String("normal", "", "fichier des états normaux (défaut : .gitscan dans le dossier scanné ou un parent)")
 		strict       = flag.Bool("strict", false, "ignorer le fichier .gitscan : tout signaler")
+		changesOnly  = flag.Bool("changes", false, "n'afficher que ce qui a changé depuis le dernier scan (rien si rien n'a changé)")
+		noSave       = flag.Bool("no-save", false, "ne pas enregistrer ce scan comme référence pour le prochain")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage : gitscan [options] [dossier]\n        gitscan help    comment lire le tableau\n\n")
@@ -191,6 +193,26 @@ func run() int {
 
 	sort.Slice(repos, func(i, j int) bool { return repos[i].Path < repos[j].Path })
 
+	// Comparaison avec le scan précédent, puis enregistrement de celui-ci.
+	snapFile := snapshotFile(root, *nested, *depth, excludes)
+	prev, snapErr := loadSnapshot(snapFile)
+	if snapErr != nil {
+		fmt.Fprintln(os.Stderr, "gitscan :", snapErr)
+	}
+	cur := takeSnapshot(root, repos)
+	changes := diffSnapshots(prev, cur)
+	if !*noSave {
+		if err := saveSnapshot(snapFile, cur); err != nil {
+			fmt.Fprintln(os.Stderr, "gitscan : scan non enregistré :", err)
+		}
+	}
+	if *changesOnly && !*jsonOut {
+		if len(changes) > 0 {
+			renderChanges(os.Stdout, changes, prev.Time, p, termWidth(*width))
+		}
+		return checkExit(*check, repos)
+	}
+
 	shown := repos
 	if *attention {
 		shown = nil
@@ -217,6 +239,11 @@ func run() int {
 		} else {
 			renderTable(os.Stdout, shown, filepath.Base(root), p, *branches, *config, termWidth(*width))
 		}
+		if prev != nil {
+			fmt.Println()
+			renderChanges(os.Stdout, changes, prev.Time, p, termWidth(*width))
+			fmt.Println()
+		}
 		renderSummary(os.Stdout, repos, p, time.Since(start), termWidth(*width))
 		if n := normalCount(repos); n > 0 {
 			printDim(os.Stdout, p, termWidth(*width), fmt.Sprintf("%s par %s · -strict pour tout voir",
@@ -236,7 +263,12 @@ func run() int {
 		printDim(os.Stdout, p, termWidth(*width), "Détails : "+strings.Join(more, " · "))
 	}
 
-	if *check {
+	return checkExit(*check, repos)
+}
+
+// checkExit : avec -check, 1 si un dépôt demande une action.
+func checkExit(check bool, repos []*Repo) int {
+	if check {
 		for _, r := range repos {
 			if r.NeedsAttention() {
 				return 1

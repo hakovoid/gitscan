@@ -18,6 +18,20 @@ func (l Level) MarshalText() ([]byte, error) {
 	return []byte([...]string{"info", "warn", "error"}[l]), nil
 }
 
+func (l *Level) UnmarshalText(b []byte) error {
+	switch string(b) {
+	case "info":
+		*l = Info
+	case "warn":
+		*l = Warn
+	case "error":
+		*l = Error
+	default:
+		return fmt.Errorf("niveau inconnu : %q", b)
+	}
+	return nil
+}
+
 // Flag est un signal sur l'état d'un dépôt (ex. « à pousser ↑2 »).
 type Flag struct {
 	Code  string `json:"code"`
