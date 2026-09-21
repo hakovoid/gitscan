@@ -232,7 +232,7 @@ func doOp(ctx context.Context, r *Repo, op string, args []string) (string, error
 	dir := r.AbsPath
 	switch op {
 	case opClean:
-		done, err := deleteMerged(ctx, dir, r.MainRef, args)
+		done, err := deleteMerged(ctx, dir, r.mainRef(), args)
 		return strings.Join(done, "\n"), err
 	case opSubmodules:
 		return updateSubmodules(ctx, dir, args)
@@ -1189,11 +1189,15 @@ func helpRows() [][2]string {
 		{"f", "fetch --all --prune : met à jour les infos du serveur, sans toucher aux fichiers"},
 		{"p", "pull --ff-only : jamais de merge implicite ; refuse si divergence"},
 		{"P", "push, avec confirmation ; -u origin HEAD si la branche n'a pas d'upstream"},
+		{"S", "sous-modules : les remettre au commit attendu par le parent (plan, puis confirmation)"},
+		{"D", "supprimer les branches fusionnées dans main (confirmation ; rien n'est perdu)"},
 		{"r / R", "ré-analyser la sélection / re-scanner tout le dossier"},
 		{"§", "VOIR PLUS"},
 		{"entrée", "détail : fichiers modifiés, branches, config, 15 derniers commits"},
 		{"b", "vue branches (voir plus bas)"},
 		{"i", "expliquer les signaux du dépôt, avec les commandes git à lancer"},
+		{"  e", "(dans i) déclarer des signaux normaux : ouvre le fichier .gitscan"},
+		{"c", "ce qui a changé depuis le dernier scan"},
 		{"s / l", "ouvrir un shell / lazygit dans le dépôt (exit pour revenir)"},
 		{"§", "AFFICHAGE"},
 		{"t", "n'afficher que les dépôts qui demandent une action"},
@@ -1201,6 +1205,7 @@ func helpRows() [][2]string {
 		{"/", "rechercher (chemin ou branche) ; entrée valide, échap efface"},
 		{"§", "DANS LA VUE BRANCHES (touche b)"},
 		{"u", "relier la branche à la branche distante de même nom (git branch -u)"},
+		{"d / D", "supprimer cette branche / toutes celles fusionnées dans main"},
 		{"entrée", "voir les commits de cette branche"},
 		{"r / échap", "rafraîchir / retour"},
 		{"§", "PARTOUT"},

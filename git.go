@@ -46,7 +46,13 @@ func runGit(ctx context.Context, dir string, args ...string) (string, error) {
 // runGitCombined renvoie stdout+stderr mêlés (utile pour push/pull, qui écrivent
 // sur stderr). En cas d'échec, l'erreur contient la ligne la plus parlante.
 func runGitCombined(ctx context.Context, dir string, args ...string) (string, error) {
+	return runGitCombinedEnv(ctx, dir, nil, args...)
+}
+
+// runGitCombinedEnv : idem, avec des variables d'environnement en plus.
+func runGitCombinedEnv(ctx context.Context, dir string, env []string, args ...string) (string, error) {
 	cmd := gitCommand(ctx, dir, args...)
+	cmd.Env = append(cmd.Env, env...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out

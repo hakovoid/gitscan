@@ -95,3 +95,16 @@ func TestTransitionServeur(t *testing.T) {
 		t.Errorf("une seule transition attendue, trouvé %+v", c)
 	}
 }
+
+// Relecture n°8 : « à pousser » déclaré normal, puis divergence : la
+// divergence, elle, doit être signalée.
+func TestTransitionDepuisUnEtatNormal(t *testing.T) {
+	avant := &snapshot{Repos: map[string]snapRepo{"web": {Branch: "main", Head: "a", Status: Info,
+		Flags: map[string]snapFlag{"ahead": {Label: "à pousser ↑1", Level: Info, Normal: true}}}}}
+	apres := &snapshot{Repos: map[string]snapRepo{"web": {Branch: "main", Head: "a", Status: Warn,
+		Flags: map[string]snapFlag{"diverged": {Label: "divergé ↑1 ↓2", Level: Warn}}}}}
+	c := diffSnapshots(avant, apres)
+	if len(c) != 1 || !strings.Contains(textOf(c[0]), "+ divergé ↑1 ↓2") {
+		t.Errorf("la divergence doit apparaître, trouvé %+v", c)
+	}
+}

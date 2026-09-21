@@ -22,6 +22,7 @@ func TestMotifs(t *testing.T) {
 		{"docs", "docs-old", false},
 		{".", ".", true},
 		{".", "api", false},
+		{"..cache", "..cache", true}, // un nom qui commence par « .. » reste un nom
 	}
 	for _, c := range cas {
 		if got := matchPattern(c.motif, c.chemin); got != c.ok {
@@ -137,5 +138,14 @@ func TestTagToujoursAffiche(t *testing.T) {
 	n.apply(r)
 	if !strings.Contains(plainOf(buildCells(r).alerts, " · "), "tag sprint-33") {
 		t.Errorf("le tag doit rester affiché même si detached est déclaré normal")
+	}
+}
+
+func TestDossierQuiCommenceParDeuxPoints(t *testing.T) {
+	if rel, ok := relInside("/srv", "/srv/..cache"); !ok || rel != "..cache" {
+		t.Errorf("« ..cache » est bien dans /srv : %q %v", rel, ok)
+	}
+	if _, ok := relInside("/srv/www", "/srv/autre"); ok {
+		t.Error("/srv/autre n'est pas dans /srv/www")
 	}
 }

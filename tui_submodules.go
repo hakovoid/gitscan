@@ -78,11 +78,11 @@ func (m *model) onSubPlan(msg subPlanMsg) {
 			pathW = max(pathW, len([]rune(p.Path)))
 		}
 		for _, p := range plans {
-			from := p.Current
+			from := short(p.Current)
 			if p.Uninit {
 				from = "—"
 			}
-			move := stMag.Render(fmt.Sprintf("%-7s → %-7s", from, p.Want))
+			move := stMag.Render(fmt.Sprintf("%-7s → %-7s", from, short(p.Want)))
 			st := stDim
 			switch {
 			case p.Blocked != "":

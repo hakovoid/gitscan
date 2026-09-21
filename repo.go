@@ -28,7 +28,8 @@ type Repo struct {
 	Ahead        int      `json:"ahead"`  // commits à pousser
 	Behind       int      `json:"behind"` // commits à tirer
 
-	MainRef         string `json:"main_ref,omitempty"`          // ex. origin/main
+	MainRef         string `json:"main_ref,omitempty"` // ex. origin/main (pour l'affichage)
+	mainFull        string // ex. refs/remotes/origin/main : jamais ambigu, pour les commandes git
 	LocalMainName   string `json:"local_main,omitempty"`        // la main locale correspondante
 	LocalMainBehind int    `json:"local_main_behind,omitempty"` // son retard sur la main distante
 	AheadMain       int    `json:"ahead_main"`                  // commits de la branche absents de main
@@ -155,10 +156,10 @@ func inspect(ctx context.Context, root, path string, opt InspectOptions) *Repo {
 		// peut-être : le travail est alors déjà sauvegardé, seul le lien manque.
 		if m := matchRemote(remotes, r.Branch); m != "" {
 			r.MatchRemote = m
-			r.MatchBehind, r.MatchAhead = leftRight(ctx, path, m, "HEAD")
+			r.MatchBehind, r.MatchAhead = leftRight(ctx, path, "refs/remotes/"+m, "HEAD")
 		}
 	}
-	r.MainRef = detectMain(ctx, path, opt.MainOverride)
+	r.MainRef, r.mainFull = detectMain(ctx, path, opt.MainOverride)
 	if r.Detached {
 		// Commits faits en HEAD détachée qu'aucune branche, aucun tag ne contient : perdables.
 		if out, err := runGit(ctx, path, "rev-list", "--count", "HEAD", "--not", "--branches", "--remotes", "--tags"); err == nil {
@@ -186,7 +187,7 @@ func inspect(ctx context.Context, root, path string, opt InspectOptions) *Repo {
 		}
 	}
 	if r.MainRef != "" {
-		r.BehindMain, r.AheadMain = leftRight(ctx, path, r.MainRef, "HEAD")
+		r.BehindMain, r.AheadMain = leftRight(ctx, path, r.mainRef(), "HEAD")
 	}
 	r.readBranches(ctx, path, remotes, opt.AllBranches)
 	r.readMerged(ctx, path)
@@ -357,25 +358,38 @@ func (r *Repo) readSubmodule(ctx context.Context, dir string) {
 
 // detectMain trouve la branche de référence : de préférence la version distante
 // (origin/main), car c'est elle qui dit si l'on est vraiment « à jour avec main ».
-func detectMain(ctx context.Context, dir, override string) string {
-	var candidates []string
+// Renvoie le nom court (affichage) et la référence complète : une branche locale
+// qui s'appellerait « origin/main » ne peut ainsi jamais être prise pour la
+// branche du serveur.
+func detectMain(ctx context.Context, dir, override string) (short, full string) {
+	type cand struct{ short, full string }
+	remote := func(name string) cand { return cand{"origin/" + name, "refs/remotes/origin/" + name} }
+	local := func(name string) cand { return cand{name, "refs/heads/" + name} }
+	var cs []cand
 	if override != "" {
-		candidates = []string{"origin/" + override, override}
+		cs = []cand{remote(override), local(override)}
 	} else {
-		if out, err := runGit(ctx, dir, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"); err == nil {
-			candidates = append(candidates, strings.TrimSpace(out))
+		if out, err := runGit(ctx, dir, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"); err == nil {
+			if ref := strings.TrimSpace(out); strings.HasPrefix(ref, "refs/remotes/") {
+				cs = append(cs, cand{strings.TrimPrefix(ref, "refs/remotes/"), ref})
+			}
 		}
-		candidates = append(candidates, "origin/main", "origin/master", "main", "master")
+		cs = append(cs, remote("main"), remote("master"), local("main"), local("master"))
 	}
-	for _, c := range candidates {
-		if c == "" {
-			continue
-		}
-		if _, err := runGit(ctx, dir, "rev-parse", "--verify", "--quiet", c+"^{commit}"); err == nil {
-			return c
+	for _, c := range cs {
+		if _, err := runGit(ctx, dir, "rev-parse", "--verify", "--quiet", c.full+"^{commit}"); err == nil {
+			return c.short, c.full
 		}
 	}
-	return ""
+	return "", ""
+}
+
+// mainRef : la référence complète de main pour les commandes git.
+func (r *Repo) mainRef() string {
+	if r.mainFull != "" {
+		return r.mainFull
+	}
+	return r.MainRef
 }
 
 // leftRight renvoie (commits dans a absents de b, commits dans b absents de a).
@@ -397,7 +411,7 @@ func leftRight(ctx context.Context, dir, a, b string) (int, int) {
 // avec main (un appel git par branche) n'est faite que si all est vrai.
 // remoteRefs renvoie les branches distantes connues (origin/main, upstream/dev…).
 func remoteRefs(ctx context.Context, dir string) map[string]bool {
-	out, err := runGit(ctx, dir, "for-each-ref", "--format=%(refname:short)", "refs/remotes")
+	out, err := runGit(ctx, dir, "for-each-ref", "--format=%(refname:lstrip=2)", "refs/remotes")
 	if err != nil {
 		return nil
 	}
@@ -427,7 +441,7 @@ func matchRemote(remotes map[string]bool, branch string) string {
 func (r *Repo) readBranches(ctx context.Context, dir string, remotes map[string]bool, all bool) {
 	const sep = "\x1f"
 	format := strings.Join([]string{
-		"%(refname:short)", "%(upstream:short)", "%(upstream:track)",
+		"%(refname:lstrip=2)", "%(upstream:short)", "%(upstream:track)",
 		"%(committerdate:unix)", "%(HEAD)",
 	}, sep)
 	out, err := runGit(ctx, dir, "for-each-ref", "--format="+format, "refs/heads")
@@ -462,7 +476,7 @@ func (r *Repo) readBranches(ctx context.Context, dir string, remotes map[string]
 		// souvent une branche depuis elle sans s'en rendre compte.
 		if b.Name == mainLocal && r.MainRef != mainLocal {
 			r.LocalMainName = b.Name
-			r.LocalMainBehind, _ = leftRight(ctx, dir, r.MainRef, b.Name)
+			r.LocalMainBehind, _ = leftRight(ctx, dir, r.mainRef(), "refs/heads/"+b.Name)
 		}
 
 		// Sans upstream, la branche est peut-être déjà sur le serveur sous le même
@@ -470,7 +484,7 @@ func (r *Repo) readBranches(ctx context.Context, dir string, remotes map[string]
 		if m := matchRemote(remotes, b.Name); m != "" {
 			b.MatchRemote = m
 			if b.Upstream == "" {
-				b.MatchBehind, b.MatchAhead = leftRight(ctx, dir, m, b.Name)
+				b.MatchBehind, b.MatchAhead = leftRight(ctx, dir, "refs/remotes/"+m, "refs/heads/"+b.Name)
 			}
 		}
 
@@ -490,7 +504,7 @@ func (r *Repo) readBranches(ctx context.Context, dir string, remotes map[string]
 			case r.MainRef == "":
 				r.UnpushedBranches = append(r.UnpushedBranches, b.Name)
 			default:
-				if _, ahead := leftRight(ctx, dir, r.MainRef, b.Name); ahead > 0 {
+				if _, ahead := leftRight(ctx, dir, r.mainRef(), "refs/heads/"+b.Name); ahead > 0 {
 					b.AheadMain = ahead
 					r.UnpushedBranches = append(r.UnpushedBranches, b.Name)
 				}
@@ -498,7 +512,7 @@ func (r *Repo) readBranches(ctx context.Context, dir string, remotes map[string]
 		}
 
 		if all && r.MainRef != "" {
-			b.BehindMain, b.AheadMain = leftRight(ctx, dir, r.MainRef, b.Name)
+			b.BehindMain, b.AheadMain = leftRight(ctx, dir, r.mainRef(), "refs/heads/"+b.Name)
 			b.MergedInMain = b.AheadMain == 0
 		}
 		if all {

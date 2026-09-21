@@ -97,7 +97,11 @@ func loadNormal(file string) (*normalRules, error) {
 			warn("il faut un motif puis au moins un signal : normal <motif> <signal>…")
 			continue
 		}
-		rule := normalRule{pattern: filepath.ToSlash(strings.Trim(fields[1], "/")), codes: map[string]bool{}, line: num}
+		pattern := filepath.ToSlash(fields[1])
+		for strings.HasPrefix(pattern, "./") {
+			pattern = pattern[2:]
+		}
+		rule := normalRule{pattern: strings.Trim(pattern, "/"), codes: map[string]bool{}, line: num}
 		for _, code := range fields[2:] {
 			switch {
 			case code == "*" || normalizable[code]:
@@ -121,11 +125,10 @@ func (n *normalRules) apply(r *Repo) {
 	if n == nil || len(n.rules) == 0 {
 		return
 	}
-	rel, err := filepath.Rel(n.base, r.AbsPath)
-	if err != nil || strings.HasPrefix(rel, "..") {
+	rel, ok := relInside(n.base, r.AbsPath)
+	if !ok {
 		return
 	}
-	rel = filepath.ToSlash(rel)
 	for i := range r.Flags {
 		f := &r.Flags[i]
 		if !normalizable[f.Code] {
@@ -205,8 +208,8 @@ func suggestRule(n *normalRules, root string, r *Repo) string {
 	if n != nil {
 		base = n.base
 	}
-	rel, err := filepath.Rel(base, r.AbsPath)
-	if err != nil || strings.HasPrefix(rel, "..") {
+	rel, ok := relInside(base, r.AbsPath)
+	if !ok {
 		return ""
 	}
 	var cs []string
@@ -222,7 +225,20 @@ func suggestRule(n *normalRules, root string, r *Repo) string {
 		return ""
 	}
 	sort.Strings(cs)
-	return fmt.Sprintf("normal  %s  %s", filepath.ToSlash(rel), strings.Join(cs, " "))
+	return fmt.Sprintf("normal  %s  %s", rel, strings.Join(cs, " "))
+}
+
+// relInside : chemin de p relatif à base (avec des /), si p est dans base.
+func relInside(base, p string) (string, bool) {
+	rel, err := filepath.Rel(base, p)
+	if err != nil {
+		return "", false
+	}
+	rel = filepath.ToSlash(rel)
+	if rel == ".." || strings.HasPrefix(rel, "../") {
+		return "", false
+	}
+	return rel, true
 }
 
 const normalHeader = `# gitscan : états normaux

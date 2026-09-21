@@ -43,7 +43,7 @@ type snapshot struct {
 func snapshotFile(root string, nested bool, depth int, excludes map[string]bool) string {
 	dir, err := os.UserCacheDir()
 	if err != nil {
-		dir = os.TempDir()
+		return "" // pas de dossier personnel (HOME absent) : pas d'historique
 	}
 	var ex []string
 	for e := range excludes {
@@ -75,6 +75,9 @@ func takeSnapshot(root string, repos []*Repo) *snapshot {
 
 // loadSnapshot renvoie nil, sans erreur, s'il n'y a pas encore d'instantané.
 func loadSnapshot(file string) (*snapshot, error) {
+	if file == "" {
+		return nil, nil
+	}
 	data, err := os.ReadFile(file)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -90,6 +93,9 @@ func loadSnapshot(file string) (*snapshot, error) {
 }
 
 func saveSnapshot(file string, s *snapshot) error {
+	if file == "" {
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		return err
 	}
@@ -149,17 +155,23 @@ func diffSnapshots(old, cur *snapshot) []change {
 				codes = append(codes, code)
 			}
 		}
-		sort.Slice(codes, func(i, j int) bool { return flagOrder(codes[i]) < flagOrder(codes[j]) })
+		sort.Slice(codes, func(i, j int) bool {
+			if a, b := flagOrder(codes[i]), flagOrder(codes[j]); a != b {
+				return a < b
+			}
+			return codes[i] < codes[j]
+		})
 		// L'état vis-à-vis du serveur est un seul signal parmi plusieurs
 		// exclusifs : « à pousser → divergé » est une transition, pas un
 		// problème réglé plus un nouveau.
 		oldS, newS := serverState(o), serverState(n)
-		if oldS != "" && newS != "" && oldS != newS && !o.Flags[oldS].Normal && !n.Flags[newS].Normal {
+		transition := oldS != "" && newS != "" && oldS != newS && !o.Flags[oldS].Normal && !n.Flags[newS].Normal
+		if transition {
 			nf := n.Flags[newS]
 			c.Items = append(c.Items, seg{o.Flags[oldS].Label + " → " + nf.Label, levelTone(nf.Level)})
 		}
 		for _, code := range codes {
-			if oldS != "" && newS != "" && oldS != newS && (code == oldS || code == newS) {
+			if transition && (code == oldS || code == newS) {
 				continue
 			}
 			of, had := o.Flags[code]

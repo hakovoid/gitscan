@@ -15,9 +15,11 @@ Scanne un dossier (et ses sous-dossiers), trouve tous les dépôts git et affich
 - l'avance/retard par rapport à **main** (détecté automatiquement : `origin/HEAD`, `main`, `master`) ;
 - les **modifications locales** : fichiers modifiés, non suivis, conflits, stash ;
 - les **branches locales jamais poussées** ou dont la branche distante a été supprimée ;
-- en option, **toutes les branches** (fusionnées ou non dans main) et la **configuration** (remotes, auteur, hooks, signature).
+- en option, **toutes les branches** (fusionnées ou non dans main) et la **configuration** (remotes, auteur, hooks, signature) ;
+- **ce qui a changé depuis le dernier scan** ;
+- en tenant compte des **états normaux** que tu déclares (fichier `.gitscan`), pour que `●` veuille toujours dire « à traiter ».
 
-Deux modes : un **rapport** en ligne de commande (scriptable, JSON) et une **interface interactive** (`-i`) pour agir en lot : fetch, pull, push.
+Deux modes : un **rapport** en ligne de commande (scriptable, JSON) et une **interface interactive** (`-i`) pour agir en lot : fetch, pull, push, ménage des branches fusionnées, remise des sous-modules au bon commit.
 
 ```
    DÉPÔT        │ BRANCHE       │ vs SERVEUR │ vs MAIN │ LOCAL                      │ À VOIR
@@ -63,7 +65,7 @@ gitscan  12 dépôts   ✗ 2 à risque   ● 7 à traiter   ✓ 3 en ordre   ~/c
   ○ ● ├─ portail   │ @eb37fd7  │ —       │ =     │ propre                │ décalé : le parent attend 6a3896d
   ○ ✗ └─ webform   │ @0dad4ed  │ —       │ ↑1    │ propre                │ 1 commit hors branche
 1 sélectionné(s)
-espace sélect. · a tout · f fetch · p pull · P push · ⏎ détail · t à traiter · / chercher · ? aide · q quitter
+espace sélect. · a tout · f fetch · p pull · P push · ⏎ détail · b branches · i expliquer · c changements · t à traiter · / chercher · ? aide · q quitter
 ```
 
 | Touche | Action |
@@ -73,10 +75,13 @@ espace sélect. · a tout · f fetch · p pull · P push · ⏎ détail · t à 
 | `f` | fetch --all --prune (sélection, ou dépôt sous le curseur) |
 | `p` | pull **--ff-only** : jamais de merge implicite, git refuse s'il y a divergence |
 | `P` | push, **avec confirmation** ; `-u origin HEAD` si la branche n'a jamais été poussée |
+| `S` | sous-modules : les remettre au commit attendu par le parent — plan d'abord (avance / recule de n commits), puis confirmation |
+| `D` | supprimer les branches fusionnées dans main, **avec confirmation** (voir « Ménage des branches ») |
 | `r` / `R` | ré-analyser la sélection / re-scanner le dossier |
 | `entrée` | détail : fichiers modifiés, branches, config, 15 derniers commits, sortie de la dernière action |
-| `b` | vue branches : lien avec le serveur, `u` relie à la branche distante de même nom, `⏎` montre ses commits |
-| `i` | encadré d'explication : chaque signal du dépôt, sa cause et les commandes git correspondantes |
+| `b` | vue branches : lien avec le serveur, `u` relie à la branche distante de même nom, `d` supprime une branche fusionnée, `⏎` montre ses commits |
+| `i` | encadré d'explication : chaque signal du dépôt (avec son code), sa cause et les commandes git correspondantes ; `e` y ouvre `.gitscan` pour déclarer des signaux normaux |
+| `c` | ce qui a changé depuis le dernier scan de ce dossier |
 | `s` / `l` | ouvrir un shell / lazygit dans le dépôt (retour dans gitscan en quittant) |
 | `t` | n'afficher que les dépôts qui demandent une action |
 | `o` | trier par nom ou par gravité |
@@ -98,6 +103,7 @@ gitscan -b ~/code           # + détail de chaque branche
 gitscan -c ~/code           # + configuration (remotes, auteur, hooks)
 gitscan -json ~/code        # sortie JSON complète
 gitscan -check ~/code       # code de sortie 1 si un dépôt demande une action
+gitscan -changes -f ~/code  # seulement ce qui a changé depuis le dernier scan
 gitscan help                # comment lire le tableau (colonnes, flèches, messages)
 ```
 
@@ -118,6 +124,10 @@ gitscan help                # comment lire le tableau (colonnes, flèches, messa
 | `-no-color` | désactive les couleurs (aussi via `NO_COLOR`) |
 | `-color auto\|always\|never` | `always` garde les couleurs dans un tuyau : `gitscan ~/code -color=always \| less -R` |
 | `-width N` | force la largeur du tableau (utile en pipe, où gitscan ne connaît pas la largeur) |
+| `-changes` | n'affiche que les changements depuis le dernier scan, et **rien** s'il n'y en a pas |
+| `-no-save` | n'enregistre pas ce scan comme référence pour le suivant |
+| `-strict` | ignore le fichier `.gitscan` : tout est signalé |
+| `-normal fichier` | utilise ce fichier d'états normaux au lieu de chercher `.gitscan` |
 
 ### Exemples avec jq
 
@@ -158,9 +168,66 @@ gitscan -json ~/code | jq -r '.[] | select(.config.user_email == null) | .path'
 | `2 commits après sprint-33` | info | aucun tag sur ce commit : distance au tag le plus proche |
 | `déjà sur origin/x : git branch -u origin/x pour la relier` | info | la branche est sur le serveur sous le même nom mais sans upstream ; `vs SERVEUR` la compare alors à cette branche et affiche `(sans upstream)` |
 | `suit origin/nbl, pas init-prd` | à traiter | la branche est reliée à une branche distante d'un autre nom : les ↑↓ de SERVEUR comparent à celle-là (`git branch -u origin/<branche>` pour corriger) |
+| `n branches fusionnées dans main, supprimables` | info | branches locales dont tous les commits sont dans main (touche `D` du mode interactif) |
 | `fetch il y a …` | info | dernier fetch de plus de 7 jours : SERVEUR est peut-être périmé |
 
 Les dépôts dont seuls les **droits** ont changé (cas fréquent sur un serveur après un `chmod -R`) sont signalés à part. Si c'est voulu : `git config core.fileMode false` dans le dépôt.
+
+## États normaux (`.gitscan`)
+
+Sur un serveur, certains signaux sont attendus : droits modifiés après un déploiement, dossier d'uploads non suivi, version figée sur un tag… À force, on ne voit plus les `●` qui comptent. Un fichier `.gitscan`, placé dans le dossier scanné (ou un de ses parents), les déclare normaux :
+
+```
+# normal  <dossier>  <signal> [<signal>…]
+normal  serveur/docs    mode_only untracked
+normal  */stopcom       detached
+normal  archives/**     *
+```
+
+- `<dossier>` est relatif au fichier : `*` remplace un nom, `**` plusieurs niveaux ; sans `/`, le motif vise le nom du dossier à n'importe quelle profondeur.
+- `<signal>` est un code : la touche `i` du mode interactif les affiche entre crochets, `gitscan help` les liste tous, `*` les prend tous.
+- Un signal déclaré normal passe en « info » : le dépôt peut redevenir `✓`, il sort de `-a`, `-check` et de la colonne À VOIR, mais reste visible avec `i` et dans le détail (« (normal) »). Le résumé dit combien de signaux sont concernés.
+- **Jamais déclarables** : conflits, commits hors branche, opération interrompue, erreur. Le tag d'une HEAD détachée reste toujours affiché.
+- `-strict` ignore le fichier. Dans le mode interactif, `i` puis `e` ouvre `.gitscan` (créé au besoin) avec une règle prête pour le dépôt, en commentaire, puis recharge.
+
+## Depuis le dernier scan
+
+Chaque scan est enregistré dans `~/.cache/gitscan` (un fichier par dossier scanné et par jeu d'options `-nested` / `-depth` / `-exclude`) et comparé au suivant. Sous le tableau :
+
+```
+   Depuis le dernier scan (il y a 3 j)
+   −      perso/notes      disparu (supprimé, déplacé ou exclu)
+          serveur/stopcom  tag sprint-33 → tag sprint-34
+   ● → ✓  work/infra       HEAD f23c379 → e243ccb · réglé : à tirer ↓3
+          work/web         à pousser ↑2 → à pousser ↑3
+```
+
+`gitscan -changes` n'affiche que cette partie, et rien du tout quand rien n'a changé : en tâche planifiée, cron n'envoie un mail que s'il y a une sortie.
+
+```sh
+# chaque matin à 8 h : fetch, puis mail seulement si quelque chose a bougé
+0 8 * * *  gitscan -f -changes -nested -color=never -width 120 /var/www
+```
+
+Dans le mode interactif, un message annonce les changements au démarrage et `c` les montre ; l'état est enregistré en quittant.
+
+## Ménage des branches
+
+gitscan repère les branches locales dont **tous les commits sont déjà dans main** : les supprimer ne perd rien. Elles sont signalées en gris (`n branches fusionnées dans main, supprimables`). Dans le mode interactif, `D` les supprime pour la sélection (ou le dépôt sous le curseur), `d` en supprime une depuis la vue branches, toujours après confirmation.
+
+- Jamais proposées : la branche courante, la main locale, une branche ouverte dans un autre worktree, et `main`, `master`, `develop`, `dev`, `staging`, `preprod`, `prod`, `production`.
+- Juste avant de supprimer, gitscan revérifie chaque branche (`git merge-base --is-ancestor`), puis affiche son dernier commit : `git branch <nom> <commit>` la recrée.
+- Une branche fusionnée par *squash* n'est pas un ancêtre de main : gitscan ne peut pas prouver qu'elle est sans risque et ne la propose pas.
+- Une branche créée depuis main sans aucun commit propre est aussi « fusionnée » : la supprimer ne perd rien, mais regarde la liste avant de confirmer.
+
+## Sous-modules : remettre au commit attendu
+
+Quand des sous-modules ne sont pas sur le commit qu'enregistre leur parent, `S` (mode interactif) calcule d'abord ce que ferait `git submodule update` pour chacun : commit actuel → attendu, et s'il **avance** ou **recule** de n commits. Rien n'est fait avant confirmation.
+
+- Sélectionner le parent vise tous ses sous-modules décalés ; sélectionner un sous-module ne vise que lui.
+- Bloqués (jamais touchés) : un sous-module avec des modifications non commitées, ou dont des commits ne sont sur aucune branche (ils seraient perdus).
+- Si le parent est lui-même en retard sur le serveur, gitscan le signale : il attend peut-être d'anciennes versions, et le bon ordre est souvent `p` (pull) sur le parent, puis `S`.
+- Après l'opération, les sous-modules sont en HEAD détachée sur le commit attendu, comme après un clone ; les commits quittés restent sur leur branche.
 
 ## Fonctionnement
 
@@ -172,10 +239,16 @@ Les dépôts dont seuls les **droits** ont changé (cas fréquent sur un serveur
 
 ## Tester
 
-`scripts/demo.sh /tmp/demo` crée des dépôts dans tous les états ci-dessus, puis `gitscan -b -c /tmp/demo/code`.
+```sh
+go test ./...                # tests automatisés, sur de vrais dépôts git créés à la volée
+scripts/demo.sh /tmp/demo    # dépôts de démonstration dans tous les états ci-dessus
+gitscan -b -c -nested /tmp/demo/code
+```
+
+Chaque test crée un « serveur » (dépôt nu) et des clones dans un dossier temporaire, provoque une situation (branche poussée sans `-u`, HEAD détachée sur tags, sous-module qui reculerait…) et vérifie ce que gitscan en conclut. Les bogues déjà rencontrés y ont chacun leur test.
 
 ## Pistes pour la suite
 
-- Dans la TUI : supprimer les branches fusionnées, changer de branche, `stash` / `stash pop`.
-- Actions en masse : `gitscan pull --ff-only`, `gitscan prune-merged`.
-- Fichier de config (`~/.config/gitscan.toml`) : dossiers par défaut, exclusions, branche principale par dépôt.
+- Changer de branche depuis la vue branches, `stash` / `stash pop`.
+- Branches protégées configurables dans `.gitscan` (aujourd'hui : liste fixe).
+- Instantanés : garder plusieurs scans pour voir l'évolution sur une semaine.

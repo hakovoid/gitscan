@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 )
 
 // printLegend affiche `gitscan help` : comment lire le tableau.
@@ -77,6 +79,7 @@ func printLegend(w io.Writer, p palette) {
 	row("n branches sans upstream", "(info) idem pour d'autres branches locales")
 	row("tag sprint-33", "(info) tag de ce commit ; « +3 autres » = 3 autres tags dessus")
 	row("2 commits après x", "(info) aucun tag sur ce commit : distance au tag le plus proche")
+	row("n branches fusionnées dans main", "(info) supprimables sans rien perdre : touche D du mode -i")
 	row("fetch il y a …", "(info) dernier fetch ancien : SERVEUR est peut-être périmé")
 
 	h("LES COULEURS")
@@ -85,6 +88,32 @@ func printLegend(w io.Writer, p palette) {
 	fmt.Fprintf(w, "  %sgris%s = rien à faire ou information   %scyan%s = branche   %smagenta%s = commit ou tag\n",
 		p.dim, p.reset, p.cyan, p.reset, p.magenta, p.reset)
 	note("Ce qui va bien reste gris : seules les lignes à traiter se colorent.")
+
+	h("ÉTATS NORMAUX (fichier .gitscan)")
+	note("Certains signaux sont attendus sur un dépôt (droits modifiés sur un serveur,")
+	note("fichiers d'upload non suivis…). Un fichier .gitscan, dans le dossier scanné")
+	note("ou un parent, les déclare normaux : ils ne comptent plus comme « à traiter ».")
+	fmt.Fprintf(w, "  %snormal  serveur/docs  mode_only untracked%s\n", p.bold, p.reset)
+	fmt.Fprintf(w, "  %snormal  archives/**   *%s\n", p.bold, p.reset)
+	note("* = un nom, ** = plusieurs niveaux ; sans /, le nom à toute profondeur.")
+	note("Codes utilisables (la touche i du mode -i montre ceux d'un dépôt) :")
+	var cs []string
+	for c := range normalizable {
+		cs = append(cs, c)
+	}
+	sort.Strings(cs)
+	for _, l := range strings.Split(wrapText(strings.Join(cs, " "), 76), "\n") {
+		fmt.Fprintf(w, "    %s%s%s\n", p.cyan, l, p.reset)
+	}
+	note("Jamais déclarables : conflits, commits hors branche, opération interrompue.")
+	note("gitscan -strict ignore le fichier.")
+
+	h("DEPUIS LE DERNIER SCAN")
+	note("Chaque scan est gardé (~/.cache/gitscan) et comparé au suivant, sous le tableau :")
+	row("● → ✓  work/infra", "le dépôt a changé d'état ; puis ce qui a bougé :")
+	row("réglé : …", "signal disparu      + … : signal apparu")
+	row("↑2 → ↑5", "valeur qui a bougé  HEAD a → b : nouveau commit ou tag")
+	note("gitscan -changes : seulement les changements (rien si rien n'a changé).")
 
 	h("IMPORTANT")
 	note("Les chiffres SERVEUR et MAIN viennent du dernier « git fetch ».")

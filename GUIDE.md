@@ -221,9 +221,12 @@ Tu te déplaces dans la liste, tu coches des dépôts, puis tu appuies sur une t
 | `f` | **fetch** : récupérer les nouveautés |
 | `p` | **pull** : mettre à jour le dépôt |
 | `P` | **push** : envoyer tes commits (demande confirmation) |
+| `D` | **ménage** : supprimer les branches déjà fusionnées dans main (demande confirmation) |
+| `S` | **sous-modules** : les remettre sur la version attendue par le projet parent (montre d'abord ce qui va changer) |
 | `entrée` | voir le **détail** du dépôt (fichiers, branches, commits) |
-| `b` | liste des branches : `u` pour relier une branche au serveur, `⏎` pour voir ses commits |
-| `i` | explique les signaux du dépôt et donne les commandes git à lancer |
+| `b` | liste des branches : `u` pour relier une branche au serveur, `d` pour supprimer une branche fusionnée, `⏎` pour voir ses commits |
+| `i` | explique les signaux du dépôt et donne les commandes git à lancer ; `e` pour dire « c'est normal ici » |
+| `c` | ce qui a **changé** depuis la dernière fois |
 | `échap` | revenir en arrière |
 | `t` | n'afficher que ce qui demande une action |
 | `/` | rechercher un dépôt |
@@ -266,16 +269,17 @@ Tape `gitscan help` pour avoir cette explication dans le terminal.
 | `↓3` (vs SERVEUR) | 3 nouveaux commits sur le serveur | `p` (ou `git pull`) |
 | `↑1 ↓1` en rouge | tu as des commits, le serveur aussi | `git pull --rebase` à la main |
 | `jamais poussée` | la branche n'existe pas sur le serveur | `P` |
-| `supprimée` | la branche a été effacée du serveur (souvent après une PR fusionnée) | supprimer la branche locale |
+| `supprimée` | la branche a été effacée du serveur (souvent après une PR fusionnée) | revenir sur main, puis supprimer la branche locale |
 | `2 modifiés` | fichiers modifiés, non commités | commiter ou annuler |
 | `dont 2 droits` | pour ces fichiers, seuls les droits (chmod) ont changé, pas le contenu | rien, ou `git config core.fileMode false` |
 | `1 nouveau` | fichier jamais ajouté à git | `git add`, ou l'ignorer |
 | `stash 1` | du travail mis de côté avec `git stash` | le récupérer ou le supprimer |
 | `rebase en cours` ✗ | une opération git a été interrompue | la terminer (`git rebase --continue`) ou l'annuler (`--abort`) |
 | `1 commit hors branche` ✗ | un commit fait sans branche : **il peut se perdre** | `git branch sauvegarde` pour le garder |
-| `décalé : le parent attend …` | le sous-module n'est pas sur la version prévue par le projet parent | `git submodule update` depuis le parent (si c'est voulu) |
+| `décalé : le parent attend …` | le sous-module n'est pas sur la version prévue par le projet parent | `S` montre s'il avancerait ou reculerait, puis le remet (si c'est voulu) |
 | `sous-module ✓` | le sous-module est sur la bonne version | rien |
 | `non poussée(s) : dev, fix` | ces branches ont des commits qui ne sont pas sur le serveur | les pousser, ou les supprimer si inutiles |
+| `3 branches fusionnées dans main` | leur travail est déjà dans main : elles ne servent plus | `D` pour les supprimer (rien n'est perdu) |
 | `tag sprint-33 (+3 autres)` | ce commit porte ce tag, et 3 autres tags pointent dessus | rien, si c'est la version voulue |
 | `main locale ↓12 vs origin/main` | ta `main` locale est en retard sur celle du serveur | `git checkout main && git pull` avant de créer une branche |
 | `2 commits après sprint-33` | aucun tag sur ce commit : il est 2 commits après le dernier tag | rien |
@@ -286,9 +290,43 @@ Couleurs : **rouge** = risque · **jaune** = à faire · **gris** = info · **ve
 
 ---
 
+## Dire à gitscan ce qui est normal
+
+Sur un serveur, certaines choses sont voulues : un dossier `uploads` que git ne suit pas, des droits changés par le déploiement… gitscan les signale quand même, et à force on ne remarque plus les vrais problèmes.
+
+Crée un fichier `.gitscan` dans le dossier que tu scannes, avec une ligne par cas :
+
+```
+normal  site/docs   untracked mode_only
+```
+
+Ça veut dire : « dans `site/docs`, les fichiers non suivis et les droits modifiés, c'est normal ». Le dépôt redevient `✓`.
+
+Pour trouver le bon mot (`untracked`, `mode_only`…) : dans le mode interactif, `i` l'affiche entre crochets à côté de chaque message. Plus simple encore : `i` puis `e` ouvre le fichier avec la ligne déjà écrite pour ce dépôt, il ne reste qu'à enlever le `#` devant.
+
+Ce qui est vraiment dangereux (conflits, commits hors branche, rebase interrompu) reste toujours affiché, même si tu l'écris dans le fichier. Et `gitscan -strict` ignore le fichier pour tout revoir.
+
+## Voir ce qui a changé
+
+gitscan se souvient du scan précédent. Sous le tableau, il montre ce qui a bougé depuis :
+
+```
+   Depuis le dernier scan (il y a 3 j)
+   ● → ✓  work/infra   réglé : à tirer ↓3
+          work/web     à pousser ↑2 → à pousser ↑3
+```
+
+`● → ✓` : le dépôt est passé de « à traiter » à « en ordre ». Dans le mode interactif, c'est la touche `c`.
+
+`gitscan -changes ~/code` n'affiche **que** ça, et rien du tout si rien n'a bougé. Pratique pour un contrôle automatique chaque matin.
+
+---
+
 ## Bon à savoir
 
-- **gitscan ne modifie rien tout seul.** Le rapport se contente de lire. En mode interactif, seules les touches `f`, `p` et `P` agissent.
+- **gitscan ne modifie rien tout seul.** Le rapport se contente de lire. En mode interactif, seules les touches d'action (`f`, `p`, `P`, `u`, `d`, `D`, `S`) touchent aux dépôts, et celles qui changent quelque chose d'important demandent confirmation.
+- **Le ménage des branches ne perd rien** : gitscan ne propose que des branches dont tout le travail est déjà dans main, et le revérifie juste avant de supprimer.
+- **Les sous-modules ne sont jamais écrasés** : s'il y a des modifications en cours ou un commit qui serait perdu, gitscan n'y touche pas.
 - **Le pull est sans risque** : si une fusion était nécessaire, gitscan refuse et te laisse faire à la main.
 - **Le push demande toujours confirmation.**
 - **Clé SSH avec mot de passe ?** Lance `ssh-add` avant d'ouvrir gitscan, sinon push et pull échouent (proprement, avec un message).
