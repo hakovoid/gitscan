@@ -87,7 +87,7 @@ func buildCells(r *Repo) rowCells {
 			sha = "?"
 		}
 		t := toneTag
-		if !r.Submodule && len(r.HeadTags) == 0 {
+		if !r.Submodule && len(r.HeadTags) == 0 && !r.isNormal("detached") {
 			t = toneWarn
 		}
 		c.branch = []seg{{"@" + sha, t}}
@@ -129,6 +129,13 @@ func buildCells(r *Repo) rowCells {
 		c.server = []seg{{"=", toneInfo}}
 	}
 
+	// Un signal déclaré normal (.gitscan) n'est plus coloré comme une alerte.
+	for _, code := range []string{"fetch_failed", "upstream_gone", "no_upstream", "ahead", "behind", "diverged"} {
+		if r.isNormal(code) {
+			soften(c.server)
+		}
+	}
+
 	// MAIN
 	switch {
 	case r.MainRef == "":
@@ -140,7 +147,7 @@ func buildCells(r *Repo) rowCells {
 			c.main = append(c.main, seg{fmt.Sprintf("↑%d", r.AheadMain), toneNeutral})
 		}
 		if r.BehindMain > 0 {
-			c.main = append(c.main, seg{fmt.Sprintf("↓%d", r.BehindMain), toneWarn})
+			c.main = append(c.main, seg{fmt.Sprintf("↓%d", r.BehindMain), warnUnless(r, "behind_main")})
 		}
 	}
 
@@ -152,16 +159,16 @@ func buildCells(r *Repo) rowCells {
 	case r.Changed > 0 && r.ModeOnly == r.Changed:
 		c.local = append(c.local, seg{plur(r.ModeOnly, "droit modifié", "droits modifiés"), toneInfo})
 	case r.ModeOnly > 0:
-		c.local = append(c.local, seg{plur(r.Changed, "modifié", "modifiés"), toneWarn},
+		c.local = append(c.local, seg{plur(r.Changed, "modifié", "modifiés"), warnUnless(r, "dirty")},
 			seg{fmt.Sprintf("dont %d droits", r.ModeOnly), toneInfo})
 	case r.Changed > 0:
-		c.local = append(c.local, seg{plur(r.Changed, "modifié", "modifiés"), toneWarn})
+		c.local = append(c.local, seg{plur(r.Changed, "modifié", "modifiés"), warnUnless(r, "dirty")})
 	}
 	if r.Untracked > 0 {
-		c.local = append(c.local, seg{plur(r.Untracked, "nouveau", "nouveaux"), toneWarn})
+		c.local = append(c.local, seg{plur(r.Untracked, "nouveau", "nouveaux"), warnUnless(r, "untracked")})
 	}
 	if r.SubmodulesChanged > 0 {
-		c.local = append(c.local, seg{plur(r.SubmodulesChanged, "sous-module", "sous-modules"), toneWarn})
+		c.local = append(c.local, seg{plur(r.SubmodulesChanged, "sous-module", "sous-modules"), warnUnless(r, "submodules_changed")})
 	}
 	if r.Stashes > 0 {
 		c.local = append(c.local, seg{fmt.Sprintf("stash %d", r.Stashes), toneInfo})
@@ -172,7 +179,7 @@ func buildCells(r *Repo) rowCells {
 
 	// À VOIR : le reste des signaux
 	for _, f := range r.Flags {
-		if inColumns[f.Code] {
+		if inColumns[f.Code] || f.Normal != "" {
 			continue
 		}
 		t := toneInfo
@@ -191,6 +198,22 @@ func buildCells(r *Repo) rowCells {
 		c.alerts = append(c.alerts, seg{"sous-module ✓", toneInfo})
 	}
 	return c
+}
+
+// warnUnless : jaune, sauf si le signal est déclaré normal pour ce dépôt.
+func warnUnless(r *Repo, code string) tone {
+	if r.isNormal(code) {
+		return toneInfo
+	}
+	return toneWarn
+}
+
+func soften(segs []seg) {
+	for i := range segs {
+		if segs[i].tone == toneWarn || segs[i].tone == toneErr {
+			segs[i].tone = toneInfo
+		}
+	}
 }
 
 // wrapSegs répartit des segments sur plusieurs lignes de largeur max width

@@ -5,7 +5,12 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 type advice struct {
@@ -45,10 +50,11 @@ func adviceFor(code string, r *Repo) advice {
 		return advice{"Des fichiers présents dans le dossier ne sont pas suivis par git : ni commités, ni ignorés.",
 			[]string{"git status --short --untracked-files=all"}}
 	case "submodules_changed":
-		return advice{"Des sous-modules de ce dépôt ne sont pas sur le commit qu'il a enregistré. Soit ils ont été déplacés ici, soit ce dépôt est plus ancien qu'eux.",
+		return advice{"Des sous-modules de ce dépôt ne sont pas sur le commit qu'il a enregistré. Soit ils ont été déplacés ici, soit ce dépôt est plus ancien qu'eux. " +
+			"La touche S montre, pour chacun, s'il avancerait ou reculerait, puis les remet au commit attendu après confirmation.",
 			[]string{"git submodule status", "git submodule update --init"}}
 	case "submodule_drift":
-		return advice{fmt.Sprintf("Ce sous-module est sur %s, alors que son dépôt parent attend %s.", r.HeadSHA, r.SubExpected),
+		return advice{fmt.Sprintf("Ce sous-module est sur %s, alors que son dépôt parent attend %s. La touche S le remet au commit attendu, après confirmation.", r.HeadSHA, r.SubExpected),
 			[]string{"git log --oneline " + r.SubExpected + "..HEAD",
 				"cd " + r.SuperProject + " && git submodule update -- " + strings.TrimPrefix(r.AbsPath, r.SuperProject+"/")}}
 	case "submodule_new":
@@ -116,28 +122,113 @@ func adviceFor(code string, r *Repo) advice {
 
 // infoContent : le texte de l'encadré d'explication pour un dépôt.
 func (m *model) infoContent(r *Repo) string {
-	p := newPalette(true)
 	var b strings.Builder
 	b.WriteString(stTitle.Render(r.Path) + "  " + renderSegs(buildCells(r).branch, "") + "\n")
 	b.WriteString(stDim.Render(truncRunes(r.AbsPath, max(20, m.infoVP.Width-2))) + "\n")
+	width := max(30, m.infoVP.Width-4)
 
-	if len(r.Flags) == 0 {
-		b.WriteString("\n" + stGreen.Render("✓ Rien à signaler : tout est commité et à jour.") + "\n")
-		return b.String()
-	}
+	var active, normal []Flag
 	for _, f := range r.Flags {
+		if f.Normal != "" {
+			normal = append(normal, f)
+		} else {
+			active = append(active, f)
+		}
+	}
+	if len(active) == 0 {
+		b.WriteString("\n" + stGreen.Render("✓ Rien à signaler : tout est commité et à jour.") + "\n")
+	}
+	for _, f := range active {
 		a := adviceFor(f.Code, r)
-		b.WriteString("\n" + levelStyle(f.Level).Render("■ ") + stBold.Render(f.Label) + "\n")
+		b.WriteString("\n" + levelStyle(f.Level).Render("■ ") + stBold.Render(f.Label) + "  " + stDim.Render("["+f.Code+"]") + "\n")
 		if a.what != "" {
-			b.WriteString(indent(wrapText(a.what, max(30, m.infoVP.Width-4)), "  ") + "\n")
+			b.WriteString(indent(wrapText(a.what, width), "  ") + "\n")
 		}
 		for _, c := range a.cmds {
 			b.WriteString("  " + stDim.Render("$ ") + stCyan.Render(c) + "\n")
 		}
 	}
-	b.WriteString("\n" + stDim.Render("Commandes à lancer dans le dépôt : la touche s y ouvre un shell. gitscan ne les exécute pas.") + "\n")
-	_ = p
+	if len(active) > 0 {
+		b.WriteString("\n" + stDim.Render("Commandes à lancer dans le dépôt : la touche s y ouvre un shell. gitscan ne les exécute pas.") + "\n")
+	}
+	if len(normal) > 0 {
+		b.WriteString("\n" + stTitle.Render("Déclaré normal") + "\n")
+		for _, f := range normal {
+			b.WriteString(stDim.Render("■ "+f.Label+"  ["+f.Code+"]  · "+f.Normal) + "\n")
+		}
+	}
+	if suggestRule(m.opt.Normal, m.root, r) != "" {
+		b.WriteString("\n" + stDim.Render(wrapText("Si l'un de ces signaux est attendu ici, la touche e ouvre le fichier "+
+			normalFileName+" avec une règle prête à activer pour ce dépôt.", width)) + "\n")
+	}
 	return b.String()
+}
+
+// normalEditedMsg : l'éditeur du fichier .gitscan vient de se fermer.
+type normalEditedMsg struct {
+	file string
+	err  error
+}
+
+// editNormal ouvre le fichier .gitscan (créé au besoin) dans l'éditeur, avec
+// une règle suggérée en commentaire pour ce dépôt.
+func (m *model) editNormal(r *Repo) tea.Cmd {
+	file := filepath.Join(m.root, normalFileName)
+	if m.opt.Normal != nil {
+		file = m.opt.Normal.file
+	}
+	if err := prepareNormalFile(file, suggestRule(m.opt.Normal, m.root, r), r.Path); err != nil {
+		m.setMsg(true, "impossible d'écrire %s : %v", file, err)
+		return nil
+	}
+	ed := editor()
+	if len(ed) == 0 {
+		m.setMsg(true, "aucun éditeur trouvé : définis $EDITOR, ou modifie %s à la main", file)
+		return nil
+	}
+	c := exec.Command(ed[0], append(ed[1:], file)...)
+	return tea.ExecProcess(c, func(err error) tea.Msg { return normalEditedMsg{file, err} })
+}
+
+func (m *model) onNormalEdited(msg normalEditedMsg) tea.Cmd {
+	m.mode = m.infoBack
+	if msg.err != nil {
+		m.setMsg(true, "éditeur : %v", msg.err)
+	}
+	n, err := loadNormal(msg.file)
+	if err != nil {
+		m.setMsg(true, "%v", err)
+		return nil
+	}
+	m.opt.Normal = n
+	if len(n.warnings) > 0 {
+		m.setMsg(true, "%s : %s", plur(len(n.warnings), "règle ignorée", "règles ignorées"), n.warnings[0])
+	} else {
+		m.setMsg(false, "%s : %s active%s, ré-analyse…", normalFileName, plur(len(n.rules), "règle", "règles"),
+			map[bool]string{true: "s"}[len(n.rules) > 1])
+	}
+	var cmds []tea.Cmd
+	for _, r := range m.repos {
+		if _, busy := m.busy[r.AbsPath]; !busy {
+			cmds = append(cmds, m.opCmd(r, "scan", false))
+		}
+	}
+	return tea.Batch(cmds...)
+}
+
+// editor : $VISUAL, $EDITOR, sinon le premier éditeur courant trouvé.
+func editor() []string {
+	for _, v := range []string{os.Getenv("VISUAL"), os.Getenv("EDITOR")} {
+		if f := strings.Fields(v); len(f) > 0 {
+			return f
+		}
+	}
+	for _, e := range []string{"nano", "vim", "vi"} {
+		if _, err := exec.LookPath(e); err == nil {
+			return []string{e}
+		}
+	}
+	return nil
 }
 
 // wrapText coupe un paragraphe à la largeur voulue, sans couper les mots.

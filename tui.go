@@ -154,6 +154,7 @@ type model struct {
 
 	infoVP   viewport.Model // encadré d'explication (touche i)
 	infoBack viewMode       // vue à restaurer en fermant l'encadré
+	infoPath string         // dépôt expliqué
 	helpVP   viewport.Model // écran des raccourcis (touche ?)
 	helpBack viewMode       // vue à restaurer en fermant les raccourcis
 	spin     spinner.Model
@@ -167,7 +168,7 @@ func runTUI(root string, depth int, excludes map[string]bool, nested bool, opt I
 	m := &model{
 		ctx: ctx, cancel: cancel,
 		root: root, depth: depth, excludes: excludes, nested: nested,
-		opt:          InspectOptions{MainOverride: opt.MainOverride, FetchTimeout: opt.FetchTimeout},
+		opt:          InspectOptions{MainOverride: opt.MainOverride, FetchTimeout: opt.FetchTimeout, Normal: opt.Normal},
 		fetchOnStart: opt.Fetch,
 		sem:          make(chan struct{}, max(1, jobs)),
 		busy:         map[string]string{},
@@ -177,6 +178,9 @@ func runTUI(root string, depth int, excludes map[string]bool, nested bool, opt I
 		vp:           viewport.New(80, 20),
 		infoVP:       viewport.New(80, 20),
 		helpVP:       viewport.New(80, 20),
+	}
+	if n := opt.Normal; n != nil && len(n.warnings) > 0 {
+		m.setMsg(true, "%s dans %s : %s", plur(len(n.warnings), "règle ignorée", "règles ignorées"), normalFileName, n.warnings[0])
 	}
 	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err
@@ -323,6 +327,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case subPlanMsg:
 		m.onSubPlan(msg)
 		return m, nil
+
+	case normalEditedMsg:
+		return m, m.onNormalEdited(msg)
 
 	case detailMsg:
 		if msg.path == m.detailPath {
@@ -844,6 +851,9 @@ func (m *model) summary() string {
 		parts = append(parts, stYellow.Render(fmt.Sprintf("● %d à traiter", todo)))
 	}
 	parts = append(parts, stGreen.Render(fmt.Sprintf("✓ %d en ordre", ok)))
+	if n := normalCount(m.repos); n > 0 {
+		parts = append(parts, stDim.Render(fmt.Sprintf("(%s)", plur(n, "signal normal", "signaux normaux"))))
+	}
 	return strings.Join(parts, "   ")
 }
 
@@ -1066,7 +1076,11 @@ func (m *model) renderDetail() string {
 	b.WriteString(stDim.Render("  "+shortPath(r.AbsPath)) + "\n")
 	var flags []string
 	for _, f := range r.Flags {
-		flags = append(flags, levelStyle(f.Level).Render(f.Label))
+		label := f.Label
+		if f.Normal != "" {
+			label += " (normal)"
+		}
+		flags = append(flags, levelStyle(f.Level).Render(label))
 	}
 	if len(flags) == 0 {
 		flags = append(flags, stGreen.Render("✓ propre et à jour"))
@@ -1258,7 +1272,7 @@ func (m *model) openInfo(r *Repo) {
 	m.infoVP.Height = max(3, min(strings.Count(content, "\n")+1, m.height-6))
 	m.infoVP.SetContent(content)
 	m.infoVP.GotoTop()
-	m.infoBack = m.mode
+	m.infoBack, m.infoPath = m.mode, r.AbsPath
 	m.mode = modeInfo
 }
 
@@ -1270,6 +1284,11 @@ func (m *model) keyInfo(msg tea.KeyMsg) tea.Cmd {
 	case "?":
 		m.openHelp()
 		return nil
+	case "e":
+		if r := m.repoByPath(m.infoPath); r != nil {
+			return m.editNormal(r)
+		}
+		return nil
 	}
 	var cmd tea.Cmd
 	m.infoVP, cmd = m.infoVP.Update(msg)
@@ -1277,7 +1296,7 @@ func (m *model) keyInfo(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *model) viewInfo() string {
-	footer := stDim.Render("↑↓ défiler · i ou échap pour fermer")
+	footer := stDim.Render("↑↓ défiler · e états normaux (" + normalFileName + ") · i ou échap pour fermer")
 	if m.infoVP.TotalLineCount() > m.infoVP.Height {
 		footer += stDim.Render(fmt.Sprintf("   %d%%", int(m.infoVP.ScrollPercent()*100)))
 	}

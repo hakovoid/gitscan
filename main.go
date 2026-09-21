@@ -46,6 +46,8 @@ func run() int {
 		check        = flag.Bool("check", false, "code de sortie 1 si un dépôt demande une action")
 		showVersion  = flag.Bool("version", false, "afficher la version")
 		interactive  = flag.Bool("i", false, "mode interactif (TUI) : naviguer, sélectionner, fetch/pull/push en lot")
+		normalFile   = flag.String("normal", "", "fichier des états normaux (défaut : .gitscan dans le dossier scanné ou un parent)")
+		strict       = flag.Bool("strict", false, "ignorer le fichier .gitscan : tout signaler")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage : gitscan [options] [dossier]\n        gitscan help    comment lire le tableau\n\n")
@@ -90,8 +92,29 @@ func run() int {
 		}
 	}
 
+	var normal *normalRules
+	if !*strict {
+		file := *normalFile
+		if file == "" {
+			file = findNormalFile(root)
+		}
+		if file != "" {
+			n, err := loadNormal(file)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "gitscan :", err)
+				return 2
+			}
+			normal = n
+			if !*interactive {
+				for _, w := range n.warnings {
+					fmt.Fprintln(os.Stderr, "gitscan : règle ignorée,", w)
+				}
+			}
+		}
+	}
+
 	if *interactive {
-		opt := InspectOptions{Fetch: *fetch, FetchTimeout: *fetchTimeout, MainOverride: *mainBranch}
+		opt := InspectOptions{Fetch: *fetch, FetchTimeout: *fetchTimeout, MainOverride: *mainBranch, Normal: normal}
 		if err := runTUI(root, *depth, excludes, *nested, opt, *jobs); err != nil {
 			fmt.Fprintln(os.Stderr, "gitscan :", err)
 			return 2
@@ -129,6 +152,7 @@ func run() int {
 		MainOverride: *mainBranch,
 		AllBranches:  *branches || *jsonOut,
 		WithConfig:   *config || *jsonOut,
+		Normal:       normal,
 	}
 
 	// Pool de workers : chaque dépôt est analysé indépendamment.
@@ -194,6 +218,10 @@ func run() int {
 			renderTable(os.Stdout, shown, filepath.Base(root), p, *branches, *config, termWidth(*width))
 		}
 		renderSummary(os.Stdout, repos, p, time.Since(start), termWidth(*width))
+		if n := normalCount(repos); n > 0 {
+			printDim(os.Stdout, p, termWidth(*width), fmt.Sprintf("%s par %s · -strict pour tout voir",
+				plur(n, "signal déclaré normal", "signaux déclarés normaux"), shortPath(normal.file)))
+		}
 		if !*fetch {
 			printDim(os.Stdout, p, termWidth(*width), "Astuce : -f pour faire un fetch d'abord (sinon vs SERVEUR peut être périmé).")
 		}

@@ -112,6 +112,7 @@ type InspectOptions struct {
 	MainOverride string
 	AllBranches  bool
 	WithConfig   bool
+	Normal       *normalRules // états déclarés normaux (.gitscan), peut être nil
 }
 
 func inspect(ctx context.Context, root, path string, opt InspectOptions) *Repo {
@@ -193,6 +194,7 @@ func inspect(ctx context.Context, root, path string, opt InspectOptions) *Repo {
 		r.Config = readConfig(ctx, path)
 	}
 	r.computeFlags()
+	opt.Normal.apply(r)
 	return r
 }
 

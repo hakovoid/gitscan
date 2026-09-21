@@ -23,6 +23,9 @@ type Flag struct {
 	Code  string `json:"code"`
 	Label string `json:"label"`
 	Level Level  `json:"level"`
+	// Déclaré normal par une règle du fichier .gitscan (« .gitscan:3 ») :
+	// le signal reste visible dans le détail mais ne compte plus.
+	Normal string `json:"normal,omitempty"`
 }
 
 // staleAfter : au-delà, on signale que les infos distantes sont peut-être périmées.
