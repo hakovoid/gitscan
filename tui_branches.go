@@ -93,6 +93,14 @@ func (m *model) keyBranches(msg tea.KeyMsg) tea.Cmd {
 			}
 			return m.linkCmd(b)
 		}
+	case "d":
+		if r := m.repoByPath(m.detailPath); r != nil && m.branchCursor < len(list) {
+			m.askClean([]*Repo{r}, list[m.branchCursor].Name)
+		}
+	case "D":
+		if r := m.repoByPath(m.detailPath); r != nil {
+			m.askClean([]*Repo{r})
+		}
 	case "r":
 		return m.loadDetailCmd(m.detailPath)
 	}
@@ -185,8 +193,11 @@ func (m *model) viewBranches() string {
 		}
 		age := stDim.Render("il y a " + humanAge(time.Since(br.LastCommit)))
 		mark := "  "
-		if linkable(br) {
+		switch {
+		case linkable(br):
 			mark = stYellow.Render("u ") // corrigeable avec la touche u
+		case contains(r.MergedBranches, br.Name):
+			mark = stDim.Render("d ") // supprimable avec la touche d
 		}
 		line := cur + mark + fit(name, w[0]) + sep + fit(renderSegs(links[i], ""), w[1]) +
 			sep + fit(mainCell, w[2]) + sep + age
@@ -194,7 +205,7 @@ func (m *model) viewBranches() string {
 	}
 	b.WriteString(strings.Repeat("\n", max(0, h-min(len(list), h))))
 	b.WriteString(fit(helpLine([][2]string{
-		{"u", "relier au serveur"}, {"⏎", "commits"}, {"r", "rafraîchir"},
+		{"u", "relier au serveur"}, {"d", "supprimer (fusionnée)"}, {"⏎", "commits"}, {"r", "rafraîchir"},
 		{"esc", "retour"}, {"↑↓", "naviguer"}, {"?", "aide"},
 	}), m.width))
 	return b.String()

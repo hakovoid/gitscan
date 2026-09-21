@@ -92,6 +92,11 @@ func adviceFor(code string, r *Repo) advice {
 			[]string{"git push -u origin " + r.UnpushedBranches[0]}}
 	case "unlinked_branches":
 		return advice{"D'autres branches locales sont déjà sur le serveur mais sans lien configuré : " + strings.Join(r.UnlinkedBranches, ", ") + ". La touche b ouvre la vue branches, où u les relie.", nil}
+	case "merged_branches":
+		return advice{"Tous les commits de ces branches sont déjà dans " + r.MainRef + " : les supprimer ne perd rien. " +
+			"Concerné : " + strings.Join(r.MergedBranches, ", ") + ". La touche D les supprime (après confirmation) ; " +
+			"dans la vue branches, d en supprime une seule. Les branches main, master, develop, staging, prod… ne sont jamais proposées.",
+			[]string{"git branch --merged " + r.MainRef}}
 	case "behind_main":
 		return advice{fmt.Sprintf("main a reçu %d commit(s) depuis que cette branche en est partie. Rien d'urgent, sauf si tu veux travailler sur une base à jour.", r.BehindMain),
 			[]string{"git log --oneline HEAD.." + r.MainRef, "git rebase " + r.MainRef}}

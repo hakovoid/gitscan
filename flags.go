@@ -121,6 +121,9 @@ func (r *Repo) computeFlags() {
 			r.add("unpushed_branches", Warn, "%d branches non poussées (%s, …)", n, strings.Join(r.UnpushedBranches[:2], ", "))
 		}
 	}
+	if n := len(r.MergedBranches); n > 0 {
+		r.add("merged_branches", Info, "%s dans main, supprimable%s", plur(n, "branche fusionnée", "branches fusionnées"), map[bool]string{true: "s"}[n > 1])
+	}
 	if r.LocalMainBehind > 0 {
 		r.add("local_main_behind", Info, "%s locale ↓%d vs %s", r.LocalMainName, r.LocalMainBehind, r.MainRef)
 	}

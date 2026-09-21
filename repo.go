@@ -61,6 +61,8 @@ type Repo struct {
 	UnpushedBranches []string `json:"unpushed_branches,omitempty"`
 	// Branches déjà sur le serveur, mais sans upstream configuré localement.
 	UnlinkedBranches []string `json:"unlinked_branches,omitempty"`
+	// Branches locales entièrement contenues dans main : supprimables sans perte.
+	MergedBranches []string `json:"merged_branches,omitempty"`
 
 	Config *Config `json:"config,omitempty"`
 
@@ -186,6 +188,7 @@ func inspect(ctx context.Context, root, path string, opt InspectOptions) *Repo {
 		r.BehindMain, r.AheadMain = leftRight(ctx, path, r.MainRef, "HEAD")
 	}
 	r.readBranches(ctx, path, remotes, opt.AllBranches)
+	r.readMerged(ctx, path)
 	if opt.WithConfig {
 		r.Config = readConfig(ctx, path)
 	}

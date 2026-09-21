@@ -143,8 +143,7 @@ type model struct {
 	welcomed            bool // premier scan terminé : on quitte l'écran d'accueil
 	scanDone, scanTotal int
 
-	confirmOp    string
-	confirmPaths []string
+	confirm *confirmation // question oui/non en cours (push, ménage, sous-modules)
 
 	detailPath   string
 	branchCursor int    // vue branches
@@ -197,8 +196,9 @@ func (m *model) discoverCmd() tea.Cmd {
 	}
 }
 
-// opCmd lance une action git sur un dépôt puis le ré-analyse.
-func (m *model) opCmd(r *Repo, op string, initial bool) tea.Cmd {
+// opCmd lance une action git sur un dépôt puis le ré-analyse. args précise
+// l'action si besoin (branches à supprimer, sous-modules à remettre…).
+func (m *model) opCmd(r *Repo, op string, initial bool, args ...string) tea.Cmd {
 	m.busy[r.AbsPath] = op
 	ctx, root, opt, sem := m.ctx, m.root, m.opt, m.sem
 	snapshot := *r
@@ -209,7 +209,7 @@ func (m *model) opCmd(r *Repo, op string, initial bool) tea.Cmd {
 		var err error
 		if op != "scan" {
 			octx, cancel := context.WithTimeout(ctx, opTimeout)
-			out, err = doOp(octx, &snapshot, op)
+			out, err = doOp(octx, &snapshot, op, args)
 			cancel()
 		}
 		fresh := inspect(ctx, root, snapshot.AbsPath, opt)
@@ -217,9 +217,14 @@ func (m *model) opCmd(r *Repo, op string, initial bool) tea.Cmd {
 	}
 }
 
-func doOp(ctx context.Context, r *Repo, op string) (string, error) {
+func doOp(ctx context.Context, r *Repo, op string, args []string) (string, error) {
 	dir := r.AbsPath
 	switch op {
+	case opClean:
+		done, err := deleteMerged(ctx, dir, r.MainRef, args)
+		return strings.Join(done, "\n"), err
+	case opSubmodules:
+		return updateSubmodules(ctx, dir, args)
 	case "fetch":
 		return runGitCombined(ctx, dir, "fetch", "--all", "--prune")
 	case "pull":
@@ -314,6 +319,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case opDoneMsg:
 		return m, m.onOpDone(msg)
+
+	case subPlanMsg:
+		m.onSubPlan(msg)
+		return m, nil
 
 	case detailMsg:
 		if msg.path == m.detailPath {
@@ -426,18 +435,31 @@ func (m *model) onOpDone(msg opDoneMsg) tea.Cmd {
 			m.welcomed = true
 		}
 	}
+	var cmds []tea.Cmd
 	if msg.op != "scan" {
 		m.results[msg.path] = opResult{op: msg.op, err: msg.err, out: msg.out, at: time.Now()}
-		if msg.err != nil {
+		switch {
+		case msg.err != nil:
 			m.setMsg(true, "✗ %s %s : %v", msg.op, msg.repo.Path, msg.err)
-		} else if !msg.initial {
+		case msg.op == opClean:
+			done := strings.Split(strings.TrimSpace(msg.out), "\n")
+			if len(done) == 1 {
+				m.setMsg(false, "✓ %s : branche %s supprimée", msg.repo.Path, done[0])
+			} else {
+				m.setMsg(false, "✓ %s : %d branches supprimées · le commit de chacune est dans le détail (entrée)",
+					msg.repo.Path, len(done))
+			}
+		case msg.op == opSubmodules:
+			m.setMsg(false, "✓ sous-modules de %s remis au commit attendu", msg.repo.Path)
+			cmds = append(cmds, m.afterSubmodules(msg.path))
+		case !msg.initial:
 			m.setMsg(false, "✓ %s %s", msg.op, msg.repo.Path)
 		}
 	}
-	if m.mode == modeDetail && msg.path == m.detailPath {
-		return m.loadDetailCmd(msg.path)
+	if (m.mode == modeDetail || m.mode == modeBranches) && msg.path == m.detailPath {
+		cmds = append(cmds, m.loadDetailCmd(msg.path))
 	}
-	return nil
+	return tea.Batch(cmds...)
 }
 
 func (m *model) keyList(msg tea.KeyMsg) tea.Cmd {
@@ -526,6 +548,10 @@ func (m *model) keyList(msg tea.KeyMsg) tea.Cmd {
 		return m.startOp("pull", m.targets())
 	case "P":
 		m.askPush(m.targets())
+	case "D":
+		m.askClean(m.targets())
+	case "S":
+		return m.askSubmodules(m.targets())
 	case "r":
 		return m.startOp("scan", m.targets())
 	case "R":
@@ -559,6 +585,16 @@ func (m *model) keyDetail(msg tea.KeyMsg) tea.Cmd {
 	case "P":
 		if r != nil {
 			m.askPush([]*Repo{r})
+		}
+		return nil
+	case "D":
+		if r != nil {
+			m.askClean([]*Repo{r})
+		}
+		return nil
+	case "S":
+		if r != nil {
+			return m.askSubmodules([]*Repo{r})
 		}
 		return nil
 	case "?":
@@ -601,28 +637,6 @@ func (m *model) keySearch(msg tea.KeyMsg) {
 	m.clampCursor()
 }
 
-func (m *model) keyConfirm(msg tea.KeyMsg) tea.Cmd {
-	back := modeList
-	if m.detailPath != "" && m.detail != nil {
-		back = modeDetail
-	}
-	switch msg.String() {
-	case "o", "y", "enter":
-		m.mode = back
-		var rs []*Repo
-		for _, p := range m.confirmPaths {
-			if r := m.repoByPath(p); r != nil {
-				rs = append(rs, r)
-			}
-		}
-		return m.startOp(m.confirmOp, rs)
-	case "n", "esc", "q":
-		m.mode = back
-		m.setMsg(false, "Push annulé.")
-	}
-	return nil
-}
-
 func (m *model) startOp(op string, rs []*Repo) tea.Cmd {
 	var cmds []tea.Cmd
 	for _, r := range rs {
@@ -638,22 +652,6 @@ func (m *model) startOp(op string, rs []*Repo) tea.Cmd {
 		m.setMsg(false, "%s sur %d dépôts…", op, len(cmds))
 	}
 	return tea.Batch(cmds...)
-}
-
-// askPush ouvre la confirmation, en ne gardant que les dépôts qui ont quelque chose à pousser.
-func (m *model) askPush(rs []*Repo) {
-	m.confirmPaths = nil
-	for _, r := range rs {
-		if !r.Detached && r.Error == "" && (r.Ahead > 0 || r.Upstream == "" || r.UpstreamGone) {
-			m.confirmPaths = append(m.confirmPaths, r.AbsPath)
-		}
-	}
-	if len(m.confirmPaths) == 0 {
-		m.setMsg(false, "Rien à pousser dans la sélection.")
-		return
-	}
-	m.confirmOp = "push"
-	m.mode = modeConfirm
 }
 
 func (m *model) lazygit(path string) tea.Cmd {
@@ -900,7 +898,10 @@ func statusIconTUI(l Level) string { return statusStyle(l).Render(statusRune(l))
 // alertsCell : action en cours, résultat de la dernière action, puis les alertes.
 func (m *model) alertsCell(r *Repo, c rowCells) string {
 	if op, ok := m.busy[r.AbsPath]; ok {
-		label := map[string]string{"scan": "analyse", "fetch": "fetch", "pull": "pull", "push": "push"}[op]
+		label := op
+		if op == "scan" {
+			label = "analyse"
+		}
 		return stCyan.Render(m.spin.View() + " " + label + "…")
 	}
 	var parts []string
@@ -1141,28 +1142,6 @@ func (m *model) viewDetail() string {
 		footer += stDim.Render(fmt.Sprintf("   %d%%", int(pct*100)))
 	}
 	return fit(title, m.width) + "\n" + m.vp.View() + "\n" + fit(footer, m.width)
-}
-
-func (m *model) viewConfirm() string {
-	var b strings.Builder
-	b.WriteString(stBold.Render(fmt.Sprintf("Pousser %d dépôt(s) ?", len(m.confirmPaths))) + "\n\n")
-	for i, p := range m.confirmPaths {
-		if i == 12 {
-			b.WriteString(stDim.Render(fmt.Sprintf("  … et %d autre(s)", len(m.confirmPaths)-12)) + "\n")
-			break
-		}
-		r := m.repoByPath(p)
-		if r == nil {
-			continue
-		}
-		what := stYellow.Render(fmt.Sprintf("↑%d", r.Ahead))
-		if r.Upstream == "" || r.UpstreamGone {
-			what = stCyan.Render("nouvelle branche distante")
-		}
-		b.WriteString(fmt.Sprintf("  %s  %s  %s\n", stBold.Render(r.Path), stCyan.Render(r.Branch), what))
-	}
-	b.WriteString("\n" + stKey.Render("o") + stDim.Render(" / entrée : oui    ") + stKey.Render("n") + stDim.Render(" / échap : non"))
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, stBox.Render(b.String()))
 }
 
 // helpRows : toutes les touches, regroupées par thème.
