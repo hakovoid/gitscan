@@ -153,7 +153,11 @@ func (m *model) viewBranches() string {
 		default:
 			mains[i] = counts(b.AheadMain, b.BehindMain)
 		}
-		w[0] = max(w[0], lipgloss.Width(b.Name))
+		nameW := lipgloss.Width(b.Name)
+		if b.Current {
+			nameW += 2 // « * » devant la branche courante
+		}
+		w[0] = max(w[0], nameW)
 		w[1] = max(w[1], widthOf(links[i], ""))
 		w[2] = max(w[2], lipgloss.Width(mains[i]))
 	}
