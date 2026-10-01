@@ -117,9 +117,10 @@ type model struct {
 	snapLoaded bool
 
 	detailPath   string
-	branchCursor int    // vue branches
-	wantBranches bool   // ouvrir la vue branches dès que le détail est chargé
-	detailRef    string // branche dont on affiche les commits ("" = branche courante)
+	branchCursor int             // vue branches
+	branchSel    map[string]bool // vue branches : branches cochées pour suppression
+	wantBranches bool            // ouvrir la vue branches dès que le détail est chargé
+	detailRef    string          // branche dont on affiche les commits ("" = branche courante)
 	detail       *detailData
 	vp           viewport.Model
 
@@ -197,7 +198,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.path == m.detailPath {
 			m.detail = &detailData{repo: msg.repo, log: msg.log, logRef: msg.logRef, files: msg.files}
 			if m.wantBranches {
-				m.wantBranches, m.mode, m.branchCursor = false, modeBranches, 0
+				m.wantBranches, m.mode, m.branchCursor, m.branchSel = false, modeBranches, 0, map[string]bool{}
 				m.msg = ""
 			}
 			m.replaceRepo(msg.repo)

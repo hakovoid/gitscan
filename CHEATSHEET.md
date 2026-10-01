@@ -98,7 +98,7 @@ normal  archives/**    *                     # tout est normal ici
 | `pgup` `pgdown` | page précédente / suivante |
 | `g` / `G` | début / fin de la liste |
 | `entrée` | détail du dépôt (fichiers, branches, config, 15 derniers commits) |
-| `b` | vue **branches** : lien avec le serveur, `u` pour relier, `d` pour supprimer, `⏎` pour voir les commits |
+| `b` | vue **branches** : lien avec le serveur, `u` pour relier, `espace` cocher (`a` toutes les fusionnées), `d` supprimer les cochées (ou celle sous le curseur), `⏎` pour voir les commits |
 | `i` | **expliquer** les signaux du dépôt, avec les commandes git à lancer ; `e` y ouvre `.gitscan` avec une règle prête |
 | `c` | ce qui a **changé** depuis le dernier scan |
 | `échap` | revenir en arrière ; efface la recherche, puis la sélection, puis le filtre |

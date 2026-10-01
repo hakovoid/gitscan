@@ -114,3 +114,11 @@ func indent(s, pre string) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// checkbox : case à cocher, lisible sans couleur ([x] / [ ]).
+func checkbox(on bool) string {
+	if on {
+		return stMag.Render("[x]")
+	}
+	return stDim.Render("[ ]")
+}

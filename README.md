@@ -79,7 +79,7 @@ espace sélect. · a tout · f fetch · p pull · P push · ⏎ détail · b bra
 | `D` | supprimer les branches fusionnées dans main, **avec confirmation** (voir « Ménage des branches ») |
 | `r` / `R` | ré-analyser la sélection / re-scanner le dossier |
 | `entrée` | détail : fichiers modifiés, branches, config, 15 derniers commits, sortie de la dernière action |
-| `b` | vue branches : lien avec le serveur, `u` relie à la branche distante de même nom, `d` supprime une branche fusionnée, `⏎` montre ses commits |
+| `b` | vue branches : lien avec le serveur, `u` relie à la branche distante de même nom, `espace` coche une branche fusionnée (`a` toutes), `d` supprime les cochées ou celle sous le curseur, `⏎` montre ses commits |
 | `i` | encadré d'explication : chaque signal du dépôt (avec son code), sa cause et les commandes git correspondantes ; `e` y ouvre `.gitscan` pour déclarer des signaux normaux |
 | `c` | ce qui a changé depuis le dernier scan de ce dossier |
 | `s` / `l` | ouvrir un shell / lazygit dans le dépôt (retour dans gitscan en quittant) |
@@ -213,7 +213,7 @@ Dans le mode interactif, un message annonce les changements au démarrage et `c`
 
 ## Ménage des branches
 
-gitscan repère les branches locales dont **tous les commits sont déjà dans main** : les supprimer ne perd rien. Elles sont signalées en gris (`n branches fusionnées dans main, supprimables`). Dans le mode interactif, `D` les supprime pour la sélection (ou le dépôt sous le curseur), `d` en supprime une depuis la vue branches, toujours après confirmation.
+gitscan repère les branches locales dont **tous les commits sont déjà dans main** : les supprimer ne perd rien. Elles sont signalées en gris (`n branches fusionnées dans main, supprimables`). Dans le mode interactif, `D` les supprime pour la sélection (ou le dépôt sous le curseur), dans la vue branches, on coche celles à supprimer (`espace`, `a` pour toutes) puis `d` ; seules les branches supprimables sans perte ont une case, la raison est indiquée pour les autres. Toujours après confirmation.
 
 - Jamais proposées : la branche courante, la main locale, une branche ouverte dans un autre worktree, et `main`, `master`, `develop`, `dev`, `staging`, `preprod`, `prod`, `production`.
 - Juste avant de supprimer, gitscan revérifie chaque branche (`git merge-base --is-ancestor`), puis affiche son dernier commit : `git branch <nom> <commit>` la recrée.

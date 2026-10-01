@@ -48,7 +48,7 @@ func (m *model) keyDetail(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	case "b":
 		if m.detail != nil && len(m.detail.repo.Branches) > 0 {
-			m.mode, m.branchCursor = modeBranches, 0
+			m.mode, m.branchCursor, m.branchSel = modeBranches, 0, map[string]bool{}
 		}
 		return nil
 	case "s":

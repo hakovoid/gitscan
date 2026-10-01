@@ -224,7 +224,7 @@ Tu te déplaces dans la liste, tu coches des dépôts, puis tu appuies sur une t
 | `D` | **ménage** : supprimer les branches déjà fusionnées dans main (demande confirmation) |
 | `S` | **sous-modules** : les remettre sur la version attendue par le projet parent (montre d'abord ce qui va changer) |
 | `entrée` | voir le **détail** du dépôt (fichiers, branches, commits) |
-| `b` | liste des branches : `u` pour relier une branche au serveur, `d` pour supprimer une branche fusionnée, `⏎` pour voir ses commits |
+| `b` | liste des branches : `u` pour relier une branche au serveur, `espace` pour cocher les branches fusionnées (`a` toutes) et `d` pour les supprimer, `⏎` pour voir ses commits |
 | `i` | explique les signaux du dépôt et donne les commandes git à lancer ; `e` pour dire « c'est normal ici » |
 | `c` | ce qui a **changé** depuis la dernière fois |
 | `échap` | revenir en arrière |
