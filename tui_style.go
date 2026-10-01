@@ -141,3 +141,38 @@ func checkbox(on bool) string {
 	}
 	return stDim.Render("[ ]")
 }
+
+// Pas d'élargissement de la colonne BRANCHE (touches + et -), et largeur minimale.
+const (
+	branchStep = 6
+	branchMinW = 10
+)
+
+// resizeBranch traite + - 0 sur la colonne BRANCHE ; false si la touche n'en est pas une.
+func (m *model) resizeBranch(key string) bool {
+	switch key {
+	case "+", "=":
+		if m.branchColW >= m.branchColMax {
+			m.setMsg(false, "La colonne BRANCHE montre déjà les noms en entier.")
+			return true
+		}
+		m.branchW = min(m.branchColMax, m.branchColW+branchStep)
+	case "-":
+		m.branchW = max(branchMinW, m.branchColW-branchStep)
+	case "0":
+		m.branchW = 0
+	default:
+		return false
+	}
+	m.msg = ""
+	return true
+}
+
+// branchCap : la largeur de la colonne BRANCHE, sachant celle du nom le plus
+// long (natural) et la largeur par défaut de la vue (auto).
+func (m *model) branchCap(natural, auto int) int {
+	if m.branchW > 0 {
+		return min(natural, max(branchMinW, m.branchW))
+	}
+	return min(natural, auto)
+}

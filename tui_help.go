@@ -39,6 +39,7 @@ func helpRows() [][2]string {
 		{"t", "n'afficher que les dépôts qui demandent une action"},
 		{"o", "trier par nom / par gravité"},
 		{"/", "rechercher (chemin ou branche) ; entrée valide, échap efface"},
+		{"+ / -", "élargir / rétrécir la colonne BRANCHE (liste et vue branches) ; 0 : largeur automatique. Un nom coupé sous le curseur s'affiche en entier dans la barre d'état"},
 		{"§", "DANS LA VUE BRANCHES (touche b)"},
 		{"espace  x", "cocher / décocher une branche fusionnée (seules celles-là ont une case)"},
 		{"a", "cocher toutes les branches fusionnées, ou tout décocher"},

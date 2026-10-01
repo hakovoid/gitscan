@@ -186,6 +186,8 @@ func (m *model) keyBranches(msg tea.KeyMsg) tea.Cmd {
 		}
 	case "r":
 		return m.loadDetailCmd(m.detailPath)
+	case "+", "=", "-", "0":
+		m.resizeBranch(msg.String())
 	}
 	m.branchCursor = max(0, min(m.branchCursor, len(list)-1))
 	return nil
@@ -248,10 +250,22 @@ func (m *model) viewBranches() string {
 		w[1] = max(w[1], widthOf(links[i], ""))
 		w[2] = max(w[2], lipgloss.Width(mains[i]))
 	}
-	w[0], w[1] = min(w[0], 34), min(w[1], 40)
+	m.branchColMax = w[0]
+	w[0], w[1] = m.branchCap(w[0], 34), min(w[1], 40)
+	m.branchColW = w[0]
 	sep := stDim.Render(" │ ")
 
 	var b strings.Builder
+	if m.branchCursor < len(list) {
+		br := list[m.branchCursor]
+		full := lipgloss.Width(br.Name)
+		if br.Current {
+			full += 2
+		}
+		if full > w[0] { // nom coupé sous le curseur : en entier dans le titre
+			title += "   " + stDim.Render("branche : ") + stCyan.Render(br.Name)
+		}
+	}
 	b.WriteString(fit(title, m.width) + "\n")
 	hdr := "      " + fit(stBold.Render("BRANCHE"), w[0]) + sep + fit(stBold.Render("LIEN AVEC LE SERVEUR"), w[1]) +
 		sep + fit(stBold.Render("vs MAIN"), w[2]) + sep + stBold.Render("DERNIER COMMIT")
@@ -330,7 +344,7 @@ func (m *model) branchKeys(list []Branch, checked []string) [][2]string {
 	if cur.Name != "" && linkable(cur) {
 		keys = append(keys, [2]string{"u", "relier au serveur"})
 	}
-	keys = append(keys, [2]string{"⏎", "commits"}, [2]string{"r", "rafraîchir"})
+	keys = append(keys, [2]string{"⏎", "commits"}, [2]string{"r", "rafraîchir"}, [2]string{"+/-", "largeur"})
 	if len(checked) > 0 {
 		keys = append(keys, [2]string{"esc", "décocher"})
 	} else {

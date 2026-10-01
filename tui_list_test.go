@@ -94,3 +94,60 @@ func TestDetailSansCouleur(t *testing.T) {
 		t.Errorf("couleurs autorisées : git log doit être coloré, trouvé %q", msg.log)
 	}
 }
+
+func TestLargeurColonneBranche(t *testing.T) {
+	gitEnv(t)
+	base := t.TempDir()
+	dir := clone(t, server(t, base, "app"), base, "app")
+	long := "feature/ALTAIRSUP-1825-size-pop-up-email-creation"
+	git(t, dir, "switch", "-q", "-c", long)
+	m := listModel(t, base, scan(t, base, dir, false))
+	m.width = 150
+
+	v := m.viewList()
+	if strings.Contains(v, "│ "+long) || !strings.Contains(v, "branche : "+long) || !strings.Contains(v, "+ élargir BRANCHE") {
+		t.Fatalf("nom long : coupé dans le tableau, en entier dans la barre d'état, + proposé\n%s", v)
+	}
+	for i := 0; i < 10 && m.branchCut; i++ {
+		m.keyList(key("+"))
+		v = m.viewList()
+	}
+	if !strings.Contains(v, "│ "+long) || strings.Contains(v, "branche : ") {
+		t.Fatalf("après +, le nom doit tenir dans la colonne\n%s", v)
+	}
+	m.keyList(key("+"))
+	if !strings.Contains(m.msg, "déjà") {
+		t.Errorf("+ au maximum : un message attendu, trouvé %q", m.msg)
+	}
+	wide := m.branchColW
+	m.keyList(key("-"))
+	m.viewList()
+	if m.branchColW != wide-branchStep {
+		t.Errorf("- : largeur %d attendue, trouvé %d", wide-branchStep, m.branchColW)
+	}
+	m.keyList(key("0"))
+	m.viewList()
+	if m.branchW != 0 || m.branchColW != 24 {
+		t.Errorf("0 : retour à la largeur automatique (24), trouvé %d (voulu %d)", m.branchColW, m.branchW)
+	}
+}
+
+func TestLargeurBrancheDansLaVueBranches(t *testing.T) {
+	gitEnv(t)
+	base := t.TempDir()
+	dir := clone(t, server(t, base, "app"), base, "app")
+	long := "chore/tres-long-nom-de-branche-qui-ne-tient-pas-dans-la-colonne"
+	git(t, dir, "branch", long)
+	m := branchModel(t, base, dir)
+	cursorOn(t, m, long)
+	if v := m.viewBranches(); !strings.Contains(v, "branche : "+long) {
+		t.Fatalf("nom coupé : il doit apparaître en entier dans le titre\n%s", v)
+	}
+	for i := 0; i < 10 && m.branchColW < m.branchColMax; i++ {
+		m.keyBranches(key("+"))
+		m.viewBranches()
+	}
+	if v := m.viewBranches(); strings.Contains(v, "branche : ") || !strings.Contains(v, long+" ") {
+		t.Errorf("après +, le nom doit tenir dans la colonne\n%s", v)
+	}
+}

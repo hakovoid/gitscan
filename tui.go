@@ -102,6 +102,14 @@ type model struct {
 	offset        int
 	width, height int
 
+	// Colonne BRANCHE (liste et vue branches) : largeur voulue, 0 = automatique
+	// (touches + - 0). branchColW/branchColMax : largeur affichée et largeur
+	// du nom le plus long au dernier affichage ; branchCut : nom coupé sous le curseur.
+	branchW      int
+	branchColW   int
+	branchColMax int
+	branchCut    bool
+
 	attentionOnly bool
 	sortByState   bool
 	searching     bool

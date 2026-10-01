@@ -87,6 +87,7 @@ La dernière ligne s'adapte : d'abord ce qu'appelle le dépôt sous le curseur (
 | `s` / `l` | ouvrir un shell / lazygit dans le dépôt (retour dans gitscan en quittant) |
 | `t` | n'afficher que les dépôts qui demandent une action |
 | `o` | trier par nom ou par gravité |
+| `+` / `-` | élargir / rétrécir la colonne BRANCHE (liste et vue branches), `0` revient à la largeur automatique ; un nom coupé sous le curseur s'affiche en entier dans la barre d'état |
 | `/` | rechercher par chemin ou branche |
 | `?` | la liste complète des raccourcis, depuis n'importe quelle vue (`↑` `↓` pour dérouler) |
 | `q` | quitter |

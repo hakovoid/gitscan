@@ -73,6 +73,8 @@ func (m *model) keyList(msg tea.KeyMsg) tea.Cmd {
 		m.cursor = 0
 	case "o":
 		m.sortByState = !m.sortByState
+	case "+", "=", "-", "0":
+		m.resizeBranch(msg.String())
 	case "/":
 		m.searching = true
 	case "?":
@@ -319,16 +321,21 @@ func (m *model) viewList() string {
 		w[3] = max(w[3], widthOf(cells[i].main, " "))
 		w[4] = max(w[4], widthOf(cells[i].local, " · "))
 	}
-	w[0], w[1], w[4] = min(w[0], 36), min(w[1], 24), min(w[4], 28)
+	m.branchColMax = w[1]
+	w[0], w[1], w[4] = min(w[0], 36), m.branchCap(w[1], 24), min(w[4], 28)
 	const lead = 8 // curseur, case à cocher, icône
 	sep := stDim.Render(" │ ")
 	fixed := func() int { return lead + w[0] + w[1] + w[2] + w[3] + w[4] + 5*3 }
 	for _, k := range []struct{ col, floor int }{{0, 14}, {4, 14}, {1, 10}} {
+		if k.col == 1 && m.branchW > 0 {
+			continue // largeur choisie avec + et - : on la respecte
+		}
 		if over := fixed() + 24 - m.width; over > 0 {
 			w[k.col] -= min(over, max(0, w[k.col]-k.floor))
 		}
 	}
 	aw := max(8, m.width-fixed())
+	m.branchColW, m.branchCut = w[1], false
 
 	hdrCells := []string{fit("DÉPÔT", w[0]), fit("BRANCHE", w[1]), fit("vs SERVEUR", w[2]), fit("vs MAIN", w[3]), fit("LOCAL", w[4]), "À VOIR"}
 	for i := range hdrCells {
@@ -347,6 +354,7 @@ func (m *model) viewList() string {
 		// par les réinitialisations des segments colorés).
 		name := stBold.Render(tr.name)
 		if i == m.cursor {
+			m.branchCut = widthOf(c.branch, "") > w[1]
 			cur = stCursor.Render("❯ ")
 			name = stCursor.Reverse(true).Render(tr.name)
 		}
@@ -367,6 +375,9 @@ func (m *model) viewList() string {
 
 	// Barre d'état
 	var status []string
+	if r := m.current(); r != nil && m.branchCut {
+		status = append(status, stDim.Render("branche : ")+stCyan.Render(plainOf(buildCells(r).branch, "")))
+	}
 	if m.searching {
 		status = append(status, stCyan.Render("/")+m.query+stCyan.Render("█"))
 	} else if m.query != "" {
@@ -435,9 +446,12 @@ func (m *model) listKeys() [][2]string {
 			add("i", "expliquer")
 		}
 	}
+	if m.branchCut {
+		add("+", "élargir BRANCHE")
+	}
 	for _, k := range [][2]string{
 		{"espace", "sélect."}, {"⏎", "détail"}, {"b", "branches"}, {"f", "fetch"}, {"c", "changements"},
-		{"t", "à traiter"}, {"/", "chercher"}, {"a", "tout"}, {"p", "pull"}, {"P", "push"}, {"q", "quitter"},
+		{"t", "à traiter"}, {"/", "chercher"}, {"+/-", "largeur BRANCHE"}, {"a", "tout"}, {"p", "pull"}, {"P", "push"}, {"q", "quitter"},
 	} {
 		add(k[0], k[1])
 	}

@@ -135,6 +135,7 @@ Les actions tournent en parallèle, avec un spinner par dépôt, puis le dépôt
 |---|---|
 | `t` | n'afficher que les dépôts qui demandent une action |
 | `o` | trier par nom ou par gravité |
+| `+` / `-` | élargir / rétrécir la colonne BRANCHE (liste et vue branches), `0` revient à la largeur automatique ; un nom coupé sous le curseur s'affiche en entier dans la barre d'état |
 | `/` | rechercher (chemin ou branche) ; `entrée` valide, `échap` efface |
 
 ### Sortir vers un autre outil
