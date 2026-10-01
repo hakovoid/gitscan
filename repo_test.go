@@ -192,3 +192,16 @@ func TestSousModuleDecale(t *testing.T) {
 func runQuiet(args ...string) error {
 	return exec.Command("git", args...).Run()
 }
+
+func TestMatchRemoteDeterministe(t *testing.T) {
+	remotes := map[string]bool{"zeta/feature": true, "alpha/feature": true, "mid/feature": true}
+	for i := 0; i < 50; i++ {
+		if got := matchRemote(remotes, "feature"); got != "alpha/feature" {
+			t.Fatalf("choix instable ou non trié : %q", got)
+		}
+	}
+	remotes["origin/feature"] = true
+	if got := matchRemote(remotes, "feature"); got != "origin/feature" {
+		t.Errorf("origin doit rester prioritaire, trouvé %q", got)
+	}
+}

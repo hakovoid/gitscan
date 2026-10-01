@@ -430,7 +430,13 @@ func matchRemote(remotes map[string]bool, branch string) string {
 	if remotes["origin/"+branch] {
 		return "origin/" + branch
 	}
+	// Parcours trié : avec plusieurs remotes, toujours le même choix d'un scan à l'autre.
+	refs := make([]string, 0, len(remotes))
 	for ref := range remotes {
+		refs = append(refs, ref)
+	}
+	sort.Strings(refs)
+	for _, ref := range refs {
 		if _, short, ok := strings.Cut(ref, "/"); ok && short == branch {
 			return ref
 		}
