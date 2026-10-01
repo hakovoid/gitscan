@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -203,5 +204,26 @@ func TestMatchRemoteDeterministe(t *testing.T) {
 	remotes["origin/feature"] = true
 	if got := matchRemote(remotes, "feature"); got != "origin/feature" {
 		t.Errorf("origin doit rester prioritaire, trouvé %q", got)
+	}
+}
+
+func TestPushNeRecreePasUneBrancheSupprimee(t *testing.T) {
+	gitEnv(t)
+	base := t.TempDir()
+	bare := server(t, base, "app")
+	dir := clone(t, bare, base, "app")
+	git(t, dir, "switch", "-q", "-c", "feature")
+	commit(t, dir, "f", "1")
+	git(t, dir, "push", "-q", "-u", "origin", "feature")
+	git(t, dir, "push", "-q", "origin", "--delete", "feature")
+	git(t, dir, "fetch", "-q", "--prune")
+
+	r := scan(t, base, dir, false)
+	mustHave(t, r, "upstream_gone")
+	if _, err := doOp(context.Background(), r, "push", nil); err == nil {
+		t.Fatal("le push d'une branche dont la distante a été supprimée doit être refusé")
+	}
+	if out := git(t, bare, "branch", "--list", "feature"); out != "" {
+		t.Errorf("la branche a été recréée sur le serveur : %q", out)
 	}
 }

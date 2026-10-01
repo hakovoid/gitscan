@@ -251,7 +251,11 @@ func doOp(ctx context.Context, r *Repo, op string, args []string) (string, error
 		if r.Detached {
 			return "", errors.New("HEAD détachée")
 		}
-		if r.Upstream == "" || r.UpstreamGone {
+		if r.UpstreamGone {
+			// Souvent une merge request fusionnée : pousser recréerait la branche.
+			return "", errors.New("branche distante supprimée, gitscan ne la recrée pas")
+		}
+		if r.Upstream == "" {
 			remote, err := pickRemote(ctx, dir)
 			if err != nil {
 				return "", err
@@ -1188,7 +1192,7 @@ func helpRows() [][2]string {
 		{"§", "AGIR SUR GIT"},
 		{"f", "fetch --all --prune : met à jour les infos du serveur, sans toucher aux fichiers"},
 		{"p", "pull --ff-only : jamais de merge implicite ; refuse si divergence"},
-		{"P", "push, avec confirmation ; -u origin HEAD si la branche n'a pas d'upstream"},
+		{"P", "push, avec confirmation ; -u origin HEAD si la branche n'a pas d'upstream (jamais si sa distante a été supprimée)"},
 		{"S", "sous-modules : les remettre au commit attendu par le parent (plan, puis confirmation)"},
 		{"D", "supprimer les branches fusionnées dans main (confirmation ; rien n'est perdu)"},
 		{"r / R", "ré-analyser la sélection / re-scanner tout le dossier"},

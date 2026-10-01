@@ -79,7 +79,7 @@ func adviceFor(code string, r *Repo) advice {
 		return advice{fmt.Sprintf("La branche est déjà sur le serveur (%s, contenu identique), mais ta copie locale n'y est pas reliée : git ne peut donc pas afficher ↑↓ tout seul.", r.MatchRemote),
 			[]string{"git branch -u " + r.MatchRemote}}
 	case "upstream_gone":
-		return advice{"La branche distante que suivait cette branche a été supprimée du serveur, en général après la fusion d'une merge request.",
+		return advice{"La branche distante que suivait cette branche a été supprimée du serveur, en général après la fusion d'une merge request. P ne la recrée pas : vérifie d'abord ce qui n'est pas dans main.",
 			[]string{"git log --oneline origin/" + strings.TrimPrefix(r.MainRef, "origin/") + "..HEAD", "git switch main"}}
 	case "upstream_other":
 		return advice{fmt.Sprintf("La branche suit %s, qui porte un autre nom qu'elle. Les ↑↓ comparent donc avec cette branche-là, pas avec origin/%s.", r.Upstream, r.Branch),

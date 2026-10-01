@@ -74,7 +74,7 @@ espace sélect. · a tout · f fetch · p pull · P push · ⏎ détail · b bra
 | `espace` / `x` | sélectionner ; `a` tout sélectionner ; `échap` efface |
 | `f` | fetch --all --prune (sélection, ou dépôt sous le curseur) |
 | `p` | pull **--ff-only** : jamais de merge implicite, git refuse s'il y a divergence |
-| `P` | push, **avec confirmation** ; `-u origin HEAD` si la branche n'a jamais été poussée |
+| `P` | push, **avec confirmation** ; `-u origin HEAD` si la branche n'a jamais été poussée ; jamais quand sa branche distante a été supprimée (souvent une MR fusionnée : le push la recréerait) |
 | `S` | sous-modules : les remettre au commit attendu par le parent — plan d'abord (avance / recule de n commits), puis confirmation |
 | `D` | supprimer les branches fusionnées dans main, **avec confirmation** (voir « Ménage des branches ») |
 | `r` / `R` | ré-analyser la sélection / re-scanner le dossier |

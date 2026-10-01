@@ -87,27 +87,46 @@ func (m *model) viewConfirm() string {
 
 // ---------- Push ----------
 
-// askPush ne garde que les dépôts qui ont quelque chose à pousser.
+// askPush ne garde que les dépôts qui ont quelque chose à pousser. Une branche
+// dont la distante a été supprimée n'est pas poussée : c'est en général une
+// merge request fusionnée, et un push recréerait la branche sur le serveur.
 func (m *model) askPush(rs []*Repo) {
-	var paths, lines []string
+	var paths, lines, gone []string
 	for _, r := range rs {
-		if r.Detached || r.Error != "" || !(r.Ahead > 0 || r.Upstream == "" || r.UpstreamGone) {
+		if r.Detached || r.Error != "" {
+			continue
+		}
+		if r.UpstreamGone {
+			gone = append(gone, r.Path)
+			continue
+		}
+		if r.Ahead == 0 && r.Upstream != "" {
 			continue
 		}
 		paths = append(paths, r.AbsPath)
 		what := stYellow.Render(fmt.Sprintf("↑%d", r.Ahead))
-		if r.Upstream == "" || r.UpstreamGone {
+		if r.Upstream == "" {
 			what = stCyan.Render("nouvelle branche distante")
 		}
 		lines = append(lines, fmt.Sprintf("%s  %s  %s", stBold.Render(r.Path), stCyan.Render(r.Branch), what))
 	}
 	if len(paths) == 0 {
-		m.setMsg(false, "Rien à pousser dans la sélection.")
+		if len(gone) > 0 {
+			m.setMsg(true, "%s : branche distante supprimée (souvent après fusion), gitscan ne la recrée pas — i pour les détails", strings.Join(gone, ", "))
+		} else {
+			m.setMsg(false, "Rien à pousser dans la sélection.")
+		}
 		return
+	}
+	note := ""
+	if len(gone) > 0 {
+		note = "Non poussé(s), branche distante supprimée (souvent après fusion) : " + strings.Join(gone, ", ") +
+			". Pour la recréer quand même : git push -u origin HEAD dans le dépôt."
 	}
 	m.ask(&confirmation{
 		title:  fmt.Sprintf("Pousser %d dépôt(s) ?", len(paths)),
 		lines:  lines,
+		note:   note,
 		cancel: "Push annulé.",
 		yes:    func() tea.Cmd { return m.startOp("push", m.reposByPaths(paths)) },
 	})

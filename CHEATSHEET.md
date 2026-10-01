@@ -120,7 +120,7 @@ Sans sélection, les actions s'appliquent au dépôt **sous le curseur**.
 |---|---|---|
 | `f` | `git fetch --all --prune` | met à jour les infos du serveur ; **ne touche à aucun fichier** |
 | `p` | `git pull --ff-only` | met à jour la branche courante ; **refuse** s'il y a divergence, HEAD détachée ou pas d'upstream |
-| `P` | `git push`, ou `git push -u origin HEAD` | envoie les commits ; **demande confirmation** (`o`/`entrée` = oui, `n`/`échap` = non) ; jamais de `--force` |
+| `P` | `git push`, ou `git push -u origin HEAD` | envoie les commits ; **demande confirmation** (`o`/`entrée` = oui, `n`/`échap` = non) ; jamais de `--force` ; ne recrée jamais une branche distante supprimée |
 | `D` | `git branch -D` sur les branches fusionnées | **demande confirmation** ; revérifie avant (tous les commits dans main) ; jamais main/master/develop/staging/prod ni la branche courante |
 | `S` | `git submodule update --init -- <chemins>` | montre d'abord, pour chaque sous-module, s'il **avance** ou **recule** ; **demande confirmation** ; n'y touche pas s'il a des modifications ou des commits qui seraient perdus |
 | `r` | — | ré-analyse la sélection |
