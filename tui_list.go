@@ -209,9 +209,9 @@ func (m *model) clampCursor() {
 
 // viewWelcome : écran d'accueil affiché pendant le premier scan.
 func (m *model) viewWelcome() string {
-	status := m.spin.View() + " Recherche des dépôts…"
+	status := m.spinner() + " Recherche des dépôts…"
 	if m.scanTotal > 0 {
-		status = fmt.Sprintf("%s Analyse des dépôts  %d / %d", m.spin.View(), m.scanDone, m.scanTotal)
+		status = fmt.Sprintf("%s Analyse des dépôts  %d / %d", m.spinner(), m.scanDone, m.scanTotal)
 		const barW = 30
 		filled := barW * m.scanDone / m.scanTotal
 		status += "\n\n" + stCyan.Render(strings.Repeat("━", filled)) + stDim.Render(strings.Repeat("━", barW-filled))
@@ -265,7 +265,7 @@ func (m *model) alertsCell(r *Repo, c rowCells) string {
 		if op == "scan" {
 			label = "analyse"
 		}
-		return stCyan.Render(m.spin.View() + " " + label + "…")
+		return stCyan.Render(m.spinner() + " " + label + "…")
 	}
 	var parts []string
 	if res, ok := m.results[r.AbsPath]; ok && time.Since(res.at) < 5*time.Minute {
@@ -303,7 +303,7 @@ func (m *model) viewList() string {
 	// En-tête
 	head := stTitle.Render("gitscan") + "  " + m.summary()
 	if m.scanning {
-		head += "   " + stCyan.Render(fmt.Sprintf("%s analyse %d/%d", m.spin.View(), m.scanDone, m.scanTotal))
+		head += "   " + stCyan.Render(fmt.Sprintf("%s analyse %d/%d", m.spinner(), m.scanDone, m.scanTotal))
 	}
 	head += "   " + stDim.Render(shortPath(m.root))
 	b.WriteString(fit(head, m.width) + "\n")
@@ -320,7 +320,7 @@ func (m *model) viewList() string {
 		w[4] = max(w[4], widthOf(cells[i].local, " · "))
 	}
 	w[0], w[1], w[4] = min(w[0], 36), min(w[1], 24), min(w[4], 28)
-	const lead = 6 // curseur, sélection, icône
+	const lead = 8 // curseur, case à cocher, icône
 	sep := stDim.Render(" │ ")
 	fixed := func() int { return lead + w[0] + w[1] + w[2] + w[3] + w[4] + 5*3 }
 	for _, k := range []struct{ col, floor int }{{0, 14}, {4, 14}, {1, 10}} {
@@ -340,10 +340,8 @@ func (m *model) viewList() string {
 	for i := m.offset; i < min(len(rows), m.offset+h); i++ {
 		tr, c := rows[i], cells[i]
 		r := tr.repo
-		cur, sel := "  ", stDim.Render("○ ")
-		if m.selected[r.AbsPath] {
-			sel = stMag.Render("● ")
-		}
+		// Une case [x] et non un rond : « ● » est déjà l'icône « à traiter ».
+		cur, sel := "  ", checkbox(m.selected[r.AbsPath])+" "
 		// Le nom du dépôt courant est en vidéo inverse : repérable même au milieu
 		// d'une ligne pleine de couleurs (un fond sur toute la ligne serait coupé
 		// par les réinitialisations des segments colorés).
@@ -394,9 +392,55 @@ func (m *model) viewList() string {
 		status = append(status, st.Render(m.msg))
 	}
 	b.WriteString(fit(strings.Join(status, "  "), m.width) + "\n")
-	b.WriteString(fit(helpLine([][2]string{
-		{"espace", "sélect."}, {"a", "tout"}, {"f", "fetch"}, {"p", "pull"}, {"P", "push"},
-		{"⏎", "détail"}, {"b", "branches"}, {"i", "expliquer"}, {"c", "changements"}, {"t", "à traiter"}, {"/", "chercher"}, {"?", "aide"}, {"q", "quitter"},
-	}), m.width))
+	b.WriteString(helpLineFit(m.listKeys(), m.width))
 	return b.String()
+}
+
+// listKeys : le pied de page de la liste, du plus utile au moins utile. D'abord
+// ce que le dépôt sous le curseur (ou la sélection) appelle, puis les touches
+// de base ; helpLineFit retire les dernières si l'écran est étroit.
+func (m *model) listKeys() [][2]string {
+	var keys [][2]string
+	seen := map[string]bool{}
+	add := func(k, label string) {
+		if !seen[k] {
+			seen[k] = true
+			keys = append(keys, [2]string{k, label})
+		}
+	}
+	if n := len(m.selected); n > 0 {
+		add("f", fmt.Sprintf("fetch (%d)", n))
+		add("p", fmt.Sprintf("pull (%d)", n))
+		add("P", fmt.Sprintf("push (%d)", n))
+		add("esc", "désélectionner")
+	} else if r := m.current(); r != nil && r.Error == "" {
+		switch {
+		case r.Detached || r.UpstreamGone:
+		case r.Ahead > 0 && r.Behind > 0:
+			add("i", "divergé : que faire ?")
+		case r.Ahead > 0:
+			add("P", fmt.Sprintf("pousser ↑%d", r.Ahead))
+		case r.Behind > 0:
+			add("p", fmt.Sprintf("tirer ↓%d", r.Behind))
+		case r.Upstream == "" && !r.NoRemote:
+			add("P", "pousser la branche")
+		}
+		if n := len(r.MergedBranches); n > 0 {
+			add("D", plur(n, "branche fusionnée", "branches fusionnées"))
+		}
+		if r.SubmodulesChanged > 0 {
+			add("S", "sous-modules")
+		}
+		if len(r.Flags) > 0 {
+			add("i", "expliquer")
+		}
+	}
+	for _, k := range [][2]string{
+		{"espace", "sélect."}, {"⏎", "détail"}, {"b", "branches"}, {"f", "fetch"}, {"c", "changements"},
+		{"t", "à traiter"}, {"/", "chercher"}, {"a", "tout"}, {"p", "pull"}, {"P", "push"}, {"q", "quitter"},
+	} {
+		add(k[0], k[1])
+	}
+	add("?", "aide")
+	return keys
 }

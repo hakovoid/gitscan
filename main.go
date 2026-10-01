@@ -49,6 +49,7 @@ func run() int {
 		normalFile   = flag.String("normal", "", "fichier des états normaux (défaut : .gitscan dans le dossier scanné ou un parent)")
 		strict       = flag.Bool("strict", false, "ignorer le fichier .gitscan : tout signaler")
 		changesOnly  = flag.Bool("changes", false, "n'afficher que ce qui a changé depuis le dernier scan (rien si rien n'a changé)")
+		noAnim       = flag.Bool("no-anim", false, "mode interactif : pas d'animation (indicateur fixe à la place des spinners)")
 		noSave       = flag.Bool("no-save", false, "ne pas enregistrer ce scan comme référence pour le prochain (implicite avec -json et -check, sauf avec -changes)")
 	)
 	flag.Usage = func() {
@@ -117,7 +118,11 @@ func run() int {
 
 	if *interactive {
 		opt := InspectOptions{Fetch: *fetch, FetchTimeout: *fetchTimeout, MainOverride: *mainBranch, Normal: normal}
-		if err := runTUI(root, *depth, excludes, *nested, opt, *jobs); err != nil {
+		ui := uiOptions{
+			colors: !*noColor && *color != "never" && os.Getenv("NO_COLOR") == "",
+			anim:   !*noAnim,
+		}
+		if err := runTUI(root, *depth, excludes, *nested, opt, *jobs, ui); err != nil {
 			fmt.Fprintln(os.Stderr, "gitscan :", err)
 			return 2
 		}

@@ -297,7 +297,7 @@ func (m *model) viewBranches() string {
 		b.WriteString(fit(line, m.width) + "\n")
 	}
 	b.WriteString(strings.Repeat("\n", max(0, h-min(len(list), h))))
-	b.WriteString(fit(helpLine(m.branchKeys(list, checked)), m.width))
+	b.WriteString(helpLineFit(m.branchKeys(list, checked), m.width))
 	return b.String()
 }
 

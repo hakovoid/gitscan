@@ -54,7 +54,7 @@ func (m *model) openChanges() {
 	}
 	var b strings.Builder
 	m.infoVP.Width = max(20, m.width-8)
-	renderChanges(&b, m.changes, m.prevSnap.Time, newPalette(true), m.infoVP.Width)
+	renderChanges(&b, m.changes, m.prevSnap.Time, newPalette(m.colors), m.infoVP.Width)
 	content := strings.TrimRight(b.String(), "\n")
 	m.infoVP.Height = max(1, min(lipgloss.Height(content), m.height-6))
 	m.infoVP.SetContent(content)

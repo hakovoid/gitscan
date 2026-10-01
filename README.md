@@ -59,19 +59,21 @@ sudo mv gitscan /usr/local/bin # ou : go install .
 
 ```
 gitscan  12 dépôts   ✗ 2 à risque   ● 7 à traiter   ✓ 3 en ordre   ~/code
-      DÉPÔT        │ BRANCHE   │ vs SERVEUR │ vs MAIN │ LOCAL                 │ À VOIR
-❯ ○ ● perso/blog   │ main      │ ↑1 ↓1   │ ↑1 ↓1 │ 1 modifié · 1 nouveau │
-  ● ✗ serveur/site │ @c6e87cf  │ —       │ ↑1    │ 1 conflit             │ rebase en cours
-  ○ ● ├─ portail   │ @eb37fd7  │ —       │ =     │ propre                │ décalé : le parent attend 6a3896d
-  ○ ✗ └─ webform   │ @0dad4ed  │ —       │ ↑1    │ propre                │ 1 commit hors branche
+        DÉPÔT        │ BRANCHE   │ vs SERVEUR │ vs MAIN │ LOCAL                 │ À VOIR
+❯ [ ] ● perso/blog   │ main      │ ↑1 ↓1   │ ↑1 ↓1 │ 1 modifié · 1 nouveau │
+  [x] ✗ serveur/site │ @c6e87cf  │ —       │ ↑1    │ 1 conflit             │ rebase en cours
+  [ ] ● ├─ portail   │ @eb37fd7  │ —       │ =     │ propre                │ décalé : le parent attend 6a3896d
+  [ ] ✗ └─ webform   │ @0dad4ed  │ —       │ ↑1    │ propre                │ 1 commit hors branche
 1 sélectionné(s)
-espace sélect. · a tout · f fetch · p pull · P push · ⏎ détail · b branches · i expliquer · c changements · t à traiter · / chercher · ? aide · q quitter
+f fetch (1) · p pull (1) · P push (1) · esc désélectionner · espace sélect. · ⏎ détail · b branches · c changements · ? aide
 ```
+
+La dernière ligne s'adapte : d'abord ce qu'appelle le dépôt sous le curseur (`P pousser ↑2`, `D 3 branches fusionnées`…) ou la sélection, puis les touches de base. Dans un terminal étroit, les moins utiles disparaissent ; `?` reste toujours là.
 
 | Touche | Action |
 |---|---|
 | `↑ ↓` / `j k` | naviguer (`g`/`G` début/fin, pgup/pgdown) |
-| `espace` / `x` | sélectionner ; `a` tout sélectionner ; `échap` efface |
+| `espace` / `x` | cocher `[x]` le dépôt ; `a` tout cocher ; `échap` efface |
 | `f` | fetch --all --prune (sélection, ou dépôt sous le curseur) |
 | `p` | pull **--ff-only** : jamais de merge implicite, git refuse s'il y a divergence |
 | `P` | push, **avec confirmation** ; `-u origin HEAD` si la branche n'a jamais été poussée ; jamais quand sa branche distante a été supprimée (souvent une MR fusionnée : le push la recréerait) |
@@ -121,7 +123,8 @@ gitscan help                # comment lire le tableau (colonnes, flèches, messa
 | `-exclude a,b` | dossiers ignorés (défaut : `node_modules,vendor,.cache,.venv,venv,target`) |
 | `-nested` | cherche aussi des dépôts dans d'autres dépôts |
 | `-check` | code de sortie 1 si un dépôt demande une action |
-| `-no-color` | désactive les couleurs (aussi via `NO_COLOR`) |
+| `-no-color` | désactive les couleurs (aussi via `NO_COLOR`), y compris dans le mode interactif |
+| `-no-anim` | mode interactif : indicateur fixe à la place des spinners animés |
 | `-color auto\|always\|never` | `always` garde les couleurs dans un tuyau : `gitscan ~/code -color=always \| less -R` |
 | `-width N` | force la largeur du tableau (utile en pipe, où gitscan ne connaît pas la largeur) |
 | `-changes` | n'affiche que les changements depuis le dernier scan, et **rien** s'il n'y en a pas |

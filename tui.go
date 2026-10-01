@@ -19,6 +19,8 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 // ---------- Messages ----------
@@ -130,11 +132,22 @@ type model struct {
 	helpVP   viewport.Model // écran des raccourcis (touche ?)
 	helpBack viewMode       // vue à restaurer en fermant les raccourcis
 	spin     spinner.Model
+	colors   bool // couleurs autorisées (-no-color, -color=never, NO_COLOR les coupent)
+	anim     bool // spinners animés (-no-anim les remplace par un signe fixe)
 	msg      string
 	msgErr   bool
 }
 
-func runTUI(root string, depth int, excludes map[string]bool, nested bool, opt InspectOptions, jobs int) error {
+// uiOptions : réglages d'affichage du mode interactif.
+type uiOptions struct {
+	colors bool
+	anim   bool
+}
+
+func runTUI(root string, depth int, excludes map[string]bool, nested bool, opt InspectOptions, jobs int, ui uiOptions) error {
+	if !ui.colors {
+		lipgloss.SetColorProfile(termenv.Ascii) // aucun code couleur ni attribut
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	m := &model{
@@ -151,6 +164,8 @@ func runTUI(root string, depth int, excludes map[string]bool, nested bool, opt I
 		infoVP:       viewport.New(80, 20),
 		helpVP:       viewport.New(80, 20),
 		snapFile:     snapshotFile(root, nested, depth, excludes),
+		colors:       ui.colors,
+		anim:         ui.anim,
 	}
 	if n := opt.Normal; n != nil && len(n.warnings) > 0 {
 		m.setMsg(true, "%s dans %s : %s", plur(len(n.warnings), "règle ignorée", "règles ignorées"), normalFileName, n.warnings[0])
@@ -160,7 +175,18 @@ func runTUI(root string, depth int, excludes map[string]bool, nested bool, opt I
 }
 
 func (m *model) Init() tea.Cmd {
+	if !m.anim {
+		return m.discoverCmd()
+	}
 	return tea.Batch(m.spin.Tick, m.discoverCmd())
+}
+
+// spinner : l'indicateur d'action en cours, animé ou fixe.
+func (m *model) spinner() string {
+	if !m.anim {
+		return "·"
+	}
+	return m.spin.View()
 }
 
 // ---------- Update ----------

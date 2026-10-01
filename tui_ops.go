@@ -108,6 +108,10 @@ func (m *model) loadDetailCmd(path string) tea.Cmd {
 	opt := m.opt
 	opt.AllBranches, opt.WithConfig = true, true
 	ref := m.detailRef
+	color := "never"
+	if m.colors {
+		color = "always"
+	}
 	return func() tea.Msg {
 		r := inspect(ctx, root, path, opt)
 		target, label := "HEAD", r.Branch
@@ -117,9 +121,9 @@ func (m *model) loadDetailCmd(path string) tea.Cmd {
 		if r.Detached && ref == "" {
 			label = "@" + r.HeadSHA
 		}
-		log, _ := runGit(ctx, path, "log", "-n", "15", "--color=always",
+		log, _ := runGit(ctx, path, "log", "-n", "15", "--color="+color,
 			"--format=%C(yellow)%h%C(reset) %s %C(dim)· %an, %cr%C(reset)%C(auto)%d", target)
-		files, _ := runGit(ctx, path, "-c", "color.status=always", "status", "--short")
+		files, _ := runGit(ctx, path, "-c", "color.status="+color, "status", "--short")
 		return detailMsg{path: path, repo: r, log: log, logRef: label, files: files}
 	}
 }

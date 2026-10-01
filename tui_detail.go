@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func (m *model) keyDetail(msg tea.KeyMsg) tea.Cmd {
@@ -67,7 +68,7 @@ func (m *model) renderDetail() string {
 		return ""
 	}
 	r := d.repo
-	p := newPalette(true)
+	p := newPalette(m.colors)
 	var b strings.Builder
 	section := func(t string) { b.WriteString("\n" + stTitle.Render(t) + "\n") }
 
@@ -127,7 +128,7 @@ func (m *model) viewDetail() string {
 	if r != nil {
 		title += stBold.Render(r.Path) + "  " + renderSegs(buildCells(r).branch, "")
 		if op, ok := m.busy[r.AbsPath]; ok {
-			title += "  " + stCyan.Render(m.spin.View()+" "+op+"…")
+			title += "  " + stCyan.Render(m.spinner()+" "+op+"…")
 		}
 	}
 	if m.msg != "" {
@@ -137,13 +138,14 @@ func (m *model) viewDetail() string {
 		}
 		title += "   " + st.Render(m.msg)
 	}
-	footer := helpLine([][2]string{
-		{"esc", "retour"}, {"f", "fetch"}, {"p", "pull"}, {"P", "push"}, {"r", "rafraîchir"},
-		{"b", "branches"}, {"i", "expliquer"}, {"s", "shell"}, {"l", "lazygit"}, {"↑↓", "défiler"},
-		{"?", "aide"},
-	})
-	if pct := m.vp.ScrollPercent(); m.vp.TotalLineCount() > m.vp.Height {
-		footer += stDim.Render(fmt.Sprintf("   %d%%", int(pct*100)))
+	pct := ""
+	if m.vp.TotalLineCount() > m.vp.Height {
+		pct = stDim.Render(fmt.Sprintf("   %d%%", int(m.vp.ScrollPercent()*100)))
 	}
+	footer := helpLineFit([][2]string{
+		{"esc", "retour"}, {"↑↓", "défiler"}, {"b", "branches"}, {"i", "expliquer"}, {"f", "fetch"},
+		{"p", "pull"}, {"P", "push"}, {"r", "rafraîchir"}, {"s", "shell"}, {"l", "lazygit"},
+		{"?", "aide"},
+	}, m.width-lipgloss.Width(pct)) + pct
 	return fit(title, m.width) + "\n" + m.vp.View() + "\n" + fit(footer, m.width)
 }

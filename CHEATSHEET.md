@@ -37,7 +37,8 @@ gitscan -version              # version installée
 | `-check` | code de sortie 1 si un dépôt demande une action (utile en CI) |
 | `-width N` | force la largeur du tableau (0 = celle du terminal) |
 | `-color auto\|always\|never` | `always` garde les couleurs dans un tuyau |
-| `-no-color` | désactive les couleurs (comme `NO_COLOR=1`) |
+| `-no-color` | désactive les couleurs (comme `NO_COLOR=1`), mode interactif compris |
+| `-no-anim` | mode interactif sans animation (pas de spinner) |
 | `-changes` | n'affiche que les changements depuis le dernier scan (rien si rien n'a changé) |
 | `-no-save` | n'enregistre pas ce scan comme référence (implicite avec `-json` et `-check`, sauf avec `-changes`) |
 | `-strict` | ignore le fichier `.gitscan` (états normaux) |
