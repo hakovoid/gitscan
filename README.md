@@ -92,6 +92,8 @@ La dernière ligne s'adapte : d'abord ce qu'appelle le dépôt sous le curseur (
 | `?` | la liste complète des raccourcis, depuis n'importe quelle vue (`↑` `↓` pour dérouler) |
 | `q` | quitter |
 
+Dans les confirmations de `P`, `S` et `D`, chaque dépôt (ou sous-module) a une case cochée : `↑` `↓` pour se déplacer, `espace` pour décocher ce qu'on ne veut pas, `a` pour tout cocher ou décocher, puis `o` / `entrée`. Ce qui ne peut pas être fait (branche distante supprimée, sous-module bloqué) est listé sans case.
+
 Les actions tournent en parallèle, avec un spinner par dépôt, et chaque dépôt est ré-analysé une fois l'action terminée. `gitscan -i -f` fait un fetch général au démarrage.
 
 Les commandes git sont détachées du terminal : si une clé SSH demande une passphrase (pas d'agent ssh), l'action échoue proprement au lieu de bloquer l'interface. Lance `ssh-add` avant.

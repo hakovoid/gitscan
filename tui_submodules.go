@@ -54,13 +54,13 @@ func (m *model) askSubmodules(rs []*Repo) tea.Cmd {
 
 func (m *model) onSubPlan(msg subPlanMsg) {
 	m.msg = ""
-	var lines []string
+	var rows []confirmRow
 	jobs := map[string][]string{}
 	var behind []string
 	for _, parent := range msg.parents {
 		name := m.displayPath(parent)
 		if err := msg.errs[parent]; err != nil {
-			lines = append(lines, stBold.Render(name)+"  "+stRed.Render("✗ "+err.Error()))
+			rows = append(rows, confirmRow{text: stBold.Render(name) + "  " + stRed.Render("✗ "+err.Error())})
 			continue
 		}
 		plans := msg.plans[parent]
@@ -72,7 +72,7 @@ func (m *model) onSubPlan(msg subPlanMsg) {
 			head += "  " + stYellow.Render(fmt.Sprintf("(le parent a ↓%d à tirer)", pr.Behind))
 			behind = append(behind, fmt.Sprintf("%s (↓%d)", name, pr.Behind))
 		}
-		lines = append(lines, head)
+		rows = append(rows, confirmRow{text: head})
 		pathW := 0
 		for _, p := range plans {
 			pathW = max(pathW, len([]rune(p.Path)))
@@ -90,14 +90,16 @@ func (m *model) onSubPlan(msg subPlanMsg) {
 			case p.Back > 0:
 				st = stYellow
 			}
-			mark := "  "
+			// Un sous-module bloqué n'a pas de case : il ne sera pas touché.
+			row := confirmRow{text: fmt.Sprintf("%s  %s  %s",
+				stCyan.Render(fmt.Sprintf("%-*s", pathW, p.Path)), move, st.Render(p.describe()))}
 			if p.Blocked != "" {
-				mark = stRed.Render("✗ ")
+				row.text = stRed.Render("✗ ") + row.text
 			} else {
 				jobs[parent] = append(jobs[parent], p.Path)
+				row.key = parent + "\x00" + p.Path
 			}
-			lines = append(lines, fmt.Sprintf("  %s%s  %s  %s", mark,
-				stCyan.Render(fmt.Sprintf("%-*s", pathW, p.Path)), move, st.Render(p.describe())))
+			rows = append(rows, row)
 		}
 	}
 	n := 0
@@ -105,13 +107,13 @@ func (m *model) onSubPlan(msg subPlanMsg) {
 		n += len(paths)
 	}
 	if n == 0 {
-		if len(lines) == 0 {
+		if len(rows) == 0 {
 			m.setMsg(false, "Rien à faire : les sous-modules sont déjà sur le commit attendu (voir l'index du parent).")
 			return
 		}
 		m.ask(&confirmation{
 			title: "Aucun sous-module ne peut être remis sans risque",
-			lines: lines,
+			lines: rowTexts(rows),
 			note:  "Règle d'abord ce qui bloque (commit, branche…), puis relance S.",
 			yes:   nil, // simple information
 		})
@@ -124,13 +126,20 @@ func (m *model) onSubPlan(msg subPlanMsg) {
 			"peut-être d'anciennes versions. Le bon ordre est souvent : p (pull) sur le parent, puis S."
 	}
 	m.ask(&confirmation{
-		title:  fmt.Sprintf("Remettre %s au commit attendu ?", plur(n, "sous-module", "sous-modules")),
-		lines:  lines,
+		titleOf: func(keys []string) string {
+			return fmt.Sprintf("Remettre %s au commit attendu ?", plur(len(keys), "sous-module", "sous-modules"))
+		},
+		rows:   rows,
 		note:   note,
 		cancel: "Sous-modules non modifiés.",
-		yes: func() tea.Cmd {
+		pick: func(keys []string) tea.Cmd {
+			chosen := map[string][]string{} // parent -> sous-modules cochés
+			for _, k := range keys {
+				parent, path, _ := strings.Cut(k, "\x00")
+				chosen[parent] = append(chosen[parent], path)
+			}
 			var cmds []tea.Cmd
-			for parent, paths := range jobs {
+			for parent, paths := range chosen {
 				r := m.repoByPath(parent)
 				if r == nil {
 					r = &Repo{AbsPath: parent, Path: m.displayPath(parent)}
@@ -166,4 +175,13 @@ func (m *model) displayPath(abs string) string {
 		return rel
 	}
 	return shortPath(abs)
+}
+
+// rowTexts : les lignes d'une confirmation sans case (simple information).
+func rowTexts(rows []confirmRow) []string {
+	out := make([]string, len(rows))
+	for i, r := range rows {
+		out[i] = r.text
+	}
+	return out
 }

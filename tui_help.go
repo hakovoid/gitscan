@@ -27,6 +27,7 @@ func helpRows() [][2]string {
 		{"P", "push, avec confirmation ; -u origin HEAD si la branche n'a pas d'upstream (jamais si sa distante a été supprimée)"},
 		{"S", "sous-modules : les remettre au commit attendu par le parent (plan, puis confirmation)"},
 		{"D", "supprimer les branches fusionnées dans main (confirmation ; rien n'est perdu)"},
+		{"  espace", "(dans ces confirmations) décocher un dépôt ou un sous-module ; a : tout ; ↑ ↓ pour choisir"},
 		{"r / R", "ré-analyser la sélection / re-scanner tout le dossier"},
 		{"§", "VOIR PLUS"},
 		{"entrée", "détail : fichiers modifiés, branches, config, 15 derniers commits"},

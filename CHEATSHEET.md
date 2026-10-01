@@ -127,6 +127,8 @@ Sans sélection, les actions s'appliquent au dépôt **sous le curseur**.
 | `r` | — | ré-analyse la sélection |
 | `R` | — | re-scanne tout le dossier |
 
+Dans ces confirmations, chaque élément a une case cochée : `↑` `↓` puis `espace` pour décocher, `a` pour tout (dé)cocher, `o` pour lancer.
+
 Les actions tournent en parallèle, avec un spinner par dépôt, puis le dépôt est ré-analysé. Le résultat reste affiché : `✓ push` ou `✗ pull : <erreur>`. Le détail (`entrée`) montre la sortie git complète.
 
 ### Affichage

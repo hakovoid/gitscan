@@ -115,7 +115,7 @@ func TestVueBranchesCocherPuisSupprimer(t *testing.T) {
 	if m.mode != modeConfirm || m.confirm == nil {
 		t.Fatalf("d doit demander confirmation, mode %v", m.mode)
 	}
-	lines := strings.Join(m.confirm.lines, "\n")
+	lines := strings.Join(rowTexts(m.confirm.rows), "\n")
 	if !strings.Contains(lines, "fusion-a") || strings.Contains(lines, "fusion-b") {
 		t.Errorf("la confirmation doit viser fusion-a seule :\n%s", lines)
 	}
