@@ -125,7 +125,7 @@ gitscan help                # comment lire le tableau (colonnes, flèches, messa
 | `-color auto\|always\|never` | `always` garde les couleurs dans un tuyau : `gitscan ~/code -color=always \| less -R` |
 | `-width N` | force la largeur du tableau (utile en pipe, où gitscan ne connaît pas la largeur) |
 | `-changes` | n'affiche que les changements depuis le dernier scan, et **rien** s'il n'y en a pas |
-| `-no-save` | n'enregistre pas ce scan comme référence pour le suivant |
+| `-no-save` | n'enregistre pas ce scan comme référence pour le suivant (implicite avec `-json` et `-check`, sauf avec `-changes`) |
 | `-strict` | ignore le fichier `.gitscan` : tout est signalé |
 | `-normal fichier` | utilise ce fichier d'états normaux au lieu de chercher `.gitscan` |
 

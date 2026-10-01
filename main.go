@@ -49,7 +49,7 @@ func run() int {
 		normalFile   = flag.String("normal", "", "fichier des états normaux (défaut : .gitscan dans le dossier scanné ou un parent)")
 		strict       = flag.Bool("strict", false, "ignorer le fichier .gitscan : tout signaler")
 		changesOnly  = flag.Bool("changes", false, "n'afficher que ce qui a changé depuis le dernier scan (rien si rien n'a changé)")
-		noSave       = flag.Bool("no-save", false, "ne pas enregistrer ce scan comme référence pour le prochain")
+		noSave       = flag.Bool("no-save", false, "ne pas enregistrer ce scan comme référence pour le prochain (implicite avec -json et -check, sauf avec -changes)")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage : gitscan [options] [dossier]\n        gitscan help    comment lire le tableau\n\n")
@@ -201,7 +201,10 @@ func run() int {
 	}
 	cur := takeSnapshot(root, repos)
 	changes := diffSnapshots(prev, cur)
-	if !*noSave {
+	// Un scan pour un script (-json, -check) ne déplace pas la référence : sinon un
+	// cron consommerait les changements avant que l'utilisateur les voie. Avec
+	// -changes, la demande porte justement sur les changements : on enregistre.
+	if !*noSave && (*changesOnly || !(*jsonOut || *check)) {
 		if err := saveSnapshot(snapFile, cur); err != nil {
 			fmt.Fprintln(os.Stderr, "gitscan : scan non enregistré :", err)
 		}
