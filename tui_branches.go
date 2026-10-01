@@ -215,17 +215,18 @@ func (m *model) viewBranches() string {
 	}
 	r := m.detail.repo
 
-	title := stTitle.Render("‹ ") + stBold.Render(r.Path) + stDim.Render(fmt.Sprintf("  %d branches", len(list)))
+	info := stDim.Render(plur(len(list), "branche", "branches"))
 	checked := m.checkedBranches()
 	if n := len(checked); n > 0 {
-		title += "   " + stMag.Render(plur(n, "cochée", "cochées"))
+		info = stMag.Render(plur(n, "cochée", "cochées")) + stDim.Render(" · ") + info
 	}
+	var status []string
 	if m.msg != "" {
 		st := stDim
 		if m.msgErr {
 			st = stRed
 		}
-		title += "   " + st.Render(m.msg)
+		status = append(status, st.Render(m.msg))
 	}
 
 	// Largeurs
@@ -255,23 +256,22 @@ func (m *model) viewBranches() string {
 	m.branchColW = w[0]
 	sep := stDim.Render(" │ ")
 
-	var b strings.Builder
+	var body []string
 	if m.branchCursor < len(list) {
 		br := list[m.branchCursor]
 		full := lipgloss.Width(br.Name)
 		if br.Current {
 			full += 2
 		}
-		if full > w[0] { // nom coupé sous le curseur : en entier dans le titre
-			title += "   " + stDim.Render("branche : ") + stCyan.Render(br.Name)
+		if full > w[0] { // nom coupé sous le curseur : en entier dans la ligne d'état
+			status = append([]string{stDim.Render("branche : ") + stCyan.Render(br.Name)}, status...)
 		}
 	}
-	b.WriteString(fit(title, m.width) + "\n")
 	hdr := "      " + fit(stBold.Render("BRANCHE"), w[0]) + sep + fit(stBold.Render("LIEN AVEC LE SERVEUR"), w[1]) +
 		sep + fit(stBold.Render("vs MAIN"), w[2]) + sep + stBold.Render("DERNIER COMMIT")
-	b.WriteString(fit(hdr, m.width) + "\n")
+	body = append(body, hdr)
 
-	h := max(1, m.height-4)
+	h := max(1, m.bodyH()-1)
 	start := max(0, min(m.branchCursor-h/2, len(list)-h))
 	for i := start; i < min(len(list), start+h); i++ {
 		br := list[i]
@@ -308,11 +308,15 @@ func (m *model) viewBranches() string {
 		}
 		line := cur + box + fit(name, w[0]) + sep + fit(renderSegs(links[i], ""), w[1]) +
 			sep + fit(mainCell, w[2]) + sep + age
-		b.WriteString(fit(line, m.width) + "\n")
+		body = append(body, line)
 	}
-	b.WriteString(strings.Repeat("\n", max(0, h-min(len(list), h))))
-	b.WriteString(helpLineFit(m.branchKeys(list, checked), m.width))
-	return b.String()
+	return m.frame(screen{
+		crumbs: []string{"gitscan", r.Path, "branches"},
+		info:   info,
+		body:   body,
+		status: strings.Join(status, "  "),
+		keys:   m.branchKeys(list, checked),
+	})
 }
 
 // branchKeys : le pied de page de la vue branches, avec d'abord ce qui est

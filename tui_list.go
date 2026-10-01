@@ -194,7 +194,7 @@ func (m *model) targets() []*Repo {
 	return rs
 }
 
-func (m *model) rowsHeight() int { return max(1, m.height-4) }
+func (m *model) rowsHeight() int { return max(1, m.bodyH()-1) } // moins l'en-tête du tableau
 
 func (m *model) clampCursor() {
 	n := len(m.visible())
@@ -298,17 +298,16 @@ func (m *model) visibleRows() []treeRow {
 }
 
 func (m *model) viewList() string {
-	var b strings.Builder
+	var body []string
 	rows := m.visibleRows()
 	m.clampCursor()
+	width := m.innerW()
 
-	// En-tête
-	head := stTitle.Render("gitscan") + "  " + m.summary()
+	// En-tête : dans la bordure du haut
+	info := m.summary()
 	if m.scanning {
-		head += "   " + stCyan.Render(fmt.Sprintf("%s analyse %d/%d", m.spinner(), m.scanDone, m.scanTotal))
+		info = stCyan.Render(fmt.Sprintf("%s analyse %d/%d", m.spinner(), m.scanDone, m.scanTotal)) + "   " + info
 	}
-	head += "   " + stDim.Render(shortPath(m.root))
-	b.WriteString(fit(head, m.width) + "\n")
 
 	// Largeurs de colonnes
 	cells := make([]rowCells, len(rows))
@@ -330,18 +329,18 @@ func (m *model) viewList() string {
 		if k.col == 1 && m.branchW > 0 {
 			continue // largeur choisie avec + et - : on la respecte
 		}
-		if over := fixed() + 24 - m.width; over > 0 {
+		if over := fixed() + 24 - width; over > 0 {
 			w[k.col] -= min(over, max(0, w[k.col]-k.floor))
 		}
 	}
-	aw := max(8, m.width-fixed())
+	aw := max(8, width-fixed())
 	m.branchColW, m.branchCut = w[1], false
 
 	hdrCells := []string{fit("DÉPÔT", w[0]), fit("BRANCHE", w[1]), fit("vs SERVEUR", w[2]), fit("vs MAIN", w[3]), fit("LOCAL", w[4]), "À VOIR"}
 	for i := range hdrCells {
 		hdrCells[i] = stBold.Render(hdrCells[i])
 	}
-	b.WriteString(fit(strings.Repeat(" ", lead)+strings.Join(hdrCells, sep), m.width) + "\n")
+	body = append(body, strings.Repeat(" ", lead)+strings.Join(hdrCells, sep))
 
 	h := m.rowsHeight()
 	for i := m.offset; i < min(len(rows), m.offset+h); i++ {
@@ -363,15 +362,13 @@ func (m *model) viewList() string {
 			fit(path, w[0]), fit(renderSegs(c.branch, ""), w[1]), fit(renderSegs(c.server, ""), w[2]),
 			fit(renderSegs(c.main, " "), w[3]), fit(renderSegs(c.local, " · "), w[4]), fit(m.alertsCell(r, c), aw),
 		}, sep)
-		b.WriteString(line + "\n")
+		body = append(body, line)
 	}
 	vis := rows
 	shown := min(len(vis), h)
 	if len(vis) == 0 && !m.scanning {
-		b.WriteString(stDim.Render("    Aucun dépôt ne correspond.") + "\n")
-		shown = 1
+		body = append(body, stDim.Render("    Aucun dépôt ne correspond."))
 	}
-	b.WriteString(strings.Repeat("\n", max(0, h-shown)))
 
 	// Barre d'état
 	var status []string
@@ -402,9 +399,13 @@ func (m *model) viewList() string {
 		}
 		status = append(status, st.Render(m.msg))
 	}
-	b.WriteString(fit(strings.Join(status, "  "), m.width) + "\n")
-	b.WriteString(helpLineFit(m.listKeys(), m.width))
-	return b.String()
+	return m.frame(screen{
+		crumbs: []string{"gitscan", shortPath(m.root)},
+		info:   info,
+		body:   body,
+		status: strings.Join(status, "  "),
+		keys:   m.listKeys(),
+	})
 }
 
 // listKeys : le pied de page de la liste, du plus utile au moins utile. D'abord

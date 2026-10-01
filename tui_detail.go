@@ -9,7 +9,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 func (m *model) keyDetail(msg tea.KeyMsg) tea.Cmd {
@@ -124,28 +123,36 @@ func (m *model) renderDetail() string {
 
 func (m *model) viewDetail() string {
 	r := m.repoByPath(m.detailPath)
-	title := stTitle.Render("‹ ")
+	crumbs, info := []string{"gitscan"}, ""
 	if r != nil {
-		title += stBold.Render(r.Path) + "  " + renderSegs(buildCells(r).branch, "")
+		crumbs = append(crumbs, r.Path)
+		info = renderSegs(buildCells(r).branch, "")
 		if op, ok := m.busy[r.AbsPath]; ok {
-			title += "  " + stCyan.Render(m.spinner()+" "+op+"…")
+			info = stCyan.Render(m.spinner()+" "+op+"…") + "  " + info
 		}
 	}
+	status := ""
 	if m.msg != "" {
 		st := stDim
 		if m.msgErr {
 			st = stRed
 		}
-		title += "   " + st.Render(m.msg)
+		status = st.Render(m.msg)
 	}
 	pct := ""
 	if m.vp.TotalLineCount() > m.vp.Height {
 		pct = stDim.Render(fmt.Sprintf("   %d%%", int(m.vp.ScrollPercent()*100)))
 	}
-	footer := helpLineFit([][2]string{
-		{"esc", "retour"}, {"↑↓", "défiler"}, {"b", "branches"}, {"i", "expliquer"}, {"f", "fetch"},
-		{"p", "pull"}, {"P", "push"}, {"r", "rafraîchir"}, {"s", "shell"}, {"l", "lazygit"},
-		{"?", "aide"},
-	}, m.width-lipgloss.Width(pct)) + pct
-	return fit(title, m.width) + "\n" + m.vp.View() + "\n" + fit(footer, m.width)
+	return m.frame(screen{
+		crumbs: crumbs,
+		info:   info,
+		body:   strings.Split(m.vp.View(), "\n"),
+		status: status,
+		keys: [][2]string{
+			{"esc", "retour"}, {"↑↓", "défiler"}, {"b", "branches"}, {"i", "expliquer"}, {"f", "fetch"},
+			{"p", "pull"}, {"P", "push"}, {"r", "rafraîchir"}, {"s", "shell"}, {"l", "lazygit"},
+			{"?", "aide"},
+		},
+		suffix: pct,
+	})
 }

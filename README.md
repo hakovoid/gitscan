@@ -58,15 +58,18 @@ sudo mv gitscan /usr/local/bin # ou : go install .
 ## Mode interactif (`gitscan -i`)
 
 ```
-gitscan  12 dépôts   ✗ 2 à risque   ● 7 à traiter   ✓ 3 en ordre   ~/code
-        DÉPÔT        │ BRANCHE   │ vs SERVEUR │ vs MAIN │ LOCAL                 │ À VOIR
-❯ [ ] ● perso/blog   │ main      │ ↑1 ↓1   │ ↑1 ↓1 │ 1 modifié · 1 nouveau │
-  [x] ✗ serveur/site │ @c6e87cf  │ —       │ ↑1    │ 1 conflit             │ rebase en cours
-  [ ] ● ├─ portail   │ @eb37fd7  │ —       │ =     │ propre                │ décalé : le parent attend 6a3896d
-  [ ] ✗ └─ webform   │ @0dad4ed  │ —       │ ↑1    │ propre                │ 1 commit hors branche
-1 sélectionné(s)
-f fetch (1) · p pull (1) · P push (1) · esc désélectionner · espace sélect. · ⏎ détail · b branches · c changements · ? aide
+╭─ gitscan › ~/code ───────────────────── 12 dépôts   ✗ 2 à risque   ● 7 à traiter   ✓ 3 en ordre ─╮
+│         DÉPÔT        │ BRANCHE   │ vs SERVEUR │ vs MAIN │ LOCAL                 │ À VOIR            │
+│ ❯ [ ] ● perso/blog   │ main      │ ↑1 ↓1      │ ↑1 ↓1   │ 1 modifié · 1 nouveau │                   │
+│   [x] ✗ serveur/site │ @c6e87cf  │ —          │ ↑1      │ 1 conflit             │ rebase en cours   │
+│   [ ] ● ├─ portail   │ @eb37fd7  │ —          │ =       │ propre                │ décalé : le pare… │
+│   [ ] ✗ └─ webform   │ @0dad4ed  │ —          │ ↑1      │ propre                │ 1 commit hors br… │
+├────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 1 sélectionné(s)                                                                                   │
+╰─ f fetch (1) · p pull (1) · P push (1) · esc désélectionner · espace sélect. · ⏎ détail · ? aide ─╯
 ```
+
+L'écran est encadré : le fil d'Ariane (`gitscan › dépôt › branches`) et les compteurs dans la bordure du haut, la ligne d'état séparée, les touches dans la bordure du bas. Dans un terminal de moins de 60 colonnes ou 10 lignes, le cadre s'efface pour laisser toute la place au tableau.
 
 La dernière ligne s'adapte : d'abord ce qu'appelle le dépôt sous le curseur (`P pousser ↑2`, `D 3 branches fusionnées`…) ou la sélection, puis les touches de base. Dans un terminal étroit, les moins utiles disparaissent ; `?` reste toujours là.
 

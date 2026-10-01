@@ -203,7 +203,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.vp.Width, m.vp.Height = msg.Width, max(1, msg.Height-2)
+		m.vp.Width, m.vp.Height = m.innerW(), m.bodyH() // le détail tient dans le cadre
 		m.infoVP.Width, m.infoVP.Height = msg.Width-4, max(1, msg.Height-4)
 		if m.detail != nil {
 			m.vp.SetContent(m.renderDetail())
