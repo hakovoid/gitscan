@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type advice struct {
@@ -246,4 +247,44 @@ func wrapText(s string, width int) string {
 		line += w
 	}
 	return strings.Join(append(lines, line), "\n")
+}
+
+// openInfo prépare l'encadré d'explication pour un dépôt.
+func (m *model) openInfo(r *Repo) {
+	m.infoVP.Width = max(20, m.width-8)
+	content := m.infoContent(r)
+	// L'encadré ne prend que la hauteur nécessaire, sans dépasser l'écran.
+	m.infoVP.Height = max(3, min(strings.Count(content, "\n")+1, m.height-6))
+	m.infoVP.SetContent(content)
+	m.infoVP.GotoTop()
+	m.infoBack, m.infoPath = m.mode, r.AbsPath
+	m.mode = modeInfo
+}
+
+func (m *model) keyInfo(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc", "q", "i", "enter":
+		m.mode = m.infoBack
+		return nil
+	case "?":
+		m.openHelp()
+		return nil
+	case "e":
+		if r := m.repoByPath(m.infoPath); r != nil {
+			return m.editNormal(r)
+		}
+		return nil
+	}
+	var cmd tea.Cmd
+	m.infoVP, cmd = m.infoVP.Update(msg)
+	return cmd
+}
+
+func (m *model) viewInfo() string {
+	footer := stDim.Render("↑↓ défiler · e états normaux (" + normalFileName + ") · i ou échap pour fermer")
+	if m.infoVP.TotalLineCount() > m.infoVP.Height {
+		footer += stDim.Render(fmt.Sprintf("   %d%%", int(m.infoVP.ScrollPercent()*100)))
+	}
+	box := stBox.Render(m.infoVP.View() + "\n" + footer)
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 }
